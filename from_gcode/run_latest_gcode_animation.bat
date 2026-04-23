@@ -2,7 +2,7 @@
 REM Workflow script: Copy latest G-code from science-jubilee to jubilee-blender-twin and run animation
 
 REM Set paths
-set "SRC_GCODE=..\..\..\science_jubilee\gcode_logs\test_corners_path.gcode"
+set "SRC_GCODE=./path.gcode"
 
 
 set "DST_GCODE=path.gcode"
