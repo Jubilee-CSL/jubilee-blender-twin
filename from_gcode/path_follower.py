@@ -11,7 +11,7 @@ Outputs pathout.csv in the current working directory, with one x,y,z row per ste
 """
 import sys
 import numpy as np
-from gcode_handlers import parse_command, get_handler
+from gcode_handlers import parse_command, GCodeMachine
 
 # Maximum mm between consecutive output positions. Larger values produce fewer
 # rows (coarser animation); smaller values produce more rows (smoother animation).
@@ -30,6 +30,7 @@ def build_path(lines: list[str], distance_per_step: float) -> list[np.ndarray]:
     # Machine starts at the origin; include it so frame 1 of the animation is at home.
     current_pos = np.array([0.0, 0.0, 0.0, 0.0])  # [x, y, z, feedrate]
     path = [current_pos.copy()]
+    machine = GCodeMachine()
 
     for line in lines:
         line = line.strip()
@@ -40,17 +41,18 @@ def build_path(lines: list[str], distance_per_step: float) -> list[np.ndarray]:
             continue
 
         # Commands without a registered handler (e.g. M-codes, T-codes) are skipped.
-        handler = get_handler(command)
+        handler = machine.get_handler(command)
         if handler is None:
             continue
 
         # Each handler returns a list of positions from current_pos (exclusive)
         # to the segment target (inclusive), spaced at most distance_per_step apart.
+        # Non-motion handlers (G90, G91, ...) return [] and only update machine state.
         steps = handler(line, current_pos, distance_per_step)
-        path.extend(steps)
-
-        # Advance the position tracker to the end of this segment.
-        current_pos = steps[-1].copy()
+        if steps:
+            path.extend(steps)
+            # Advance the position tracker to the end of this segment.
+            current_pos = steps[-1].copy()
 
     return path
 

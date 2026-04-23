@@ -24,12 +24,17 @@ def _extract_numeric_after(token: str) -> float | None:
         return None
 
 
-def find_coord(line: str, curcoord: np.ndarray) -> np.ndarray:
+def find_coord(line: str, curcoord: np.ndarray, relative: bool = False) -> np.ndarray:
     """Extract target coordinates from a single gcode line.
 
     Scans for X, Y, Z, and F tokens and updates the corresponding element of
-    curcoord.  Axes not mentioned in the line keep their current values, which
-    represents the gcode absolute-positioning convention (G90).
+    curcoord.  Axes not mentioned in the line keep their current values.
+
+    When relative is False (G90 absolute mode) each axis value replaces the
+    current position directly.  When relative is True (G91 relative mode) each
+    axis value is an offset added to the current position.  The feedrate (F) is
+    always interpreted as an absolute value regardless of positioning mode,
+    matching Duet firmware behaviour.
 
     Returns a new array; curcoord is not modified.
     """
@@ -40,7 +45,10 @@ def find_coord(line: str, curcoord: np.ndarray) -> np.ndarray:
             after = line.split(axis, 1)[1]
             val = _extract_numeric_after(after)
             if val is not None:
-                nl[i] = val
+                if relative and axis != 'F':
+                    nl[i] = curcoord[i] + val
+                else:
+                    nl[i] = val
     return nl
 
 
