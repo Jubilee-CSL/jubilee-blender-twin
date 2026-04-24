@@ -5,7 +5,7 @@ from mathutils.bvhtree import BVHTree
 
 source_object_name = "greiner_24_wellplate_3300ul"
 target_collection_name = "Z-axis"
-collision_margin = .075
+collision_margin = .0002
 attribute_name = "Collision Frame"
 enable_report = True
 
@@ -29,6 +29,9 @@ if num_of_objects == 0:
 print(f"Source object: '{source_object_name}'")
 print(f"Target collection: '{target_collection_name}' ({num_of_objects} eligible mesh object(s))")
 
+# Set to start frame once for all setup work — this is the only frame_set call.
+frame_curr = bpy.context.scene.frame_current
+bpy.context.scene.frame_set(bpy.context.scene.frame_start)
 depsgraph = bpy.context.evaluated_depsgraph_get()
 
 # Build source BVH once in local space — valid because source doesn't deform.
@@ -51,7 +54,8 @@ print(f"Collision margin: {collision_margin} (world) → {local_collision_margin
 # This assumes all objects in the collection move together as a rigid body.
 # The first object in the collection acts as the anchor for the shared local space.
 anchor = target_objects[0]
-anchor_matrix_inv = anchor.matrix_world.inverted()
+anchor_world = anchor.evaluated_get(depsgraph).matrix_world
+anchor_matrix_inv = anchor_world.inverted()
 
 combined_bm = bmesh.new()
 for obj in target_objects:
@@ -70,12 +74,63 @@ combined_bm.free()
 
 print(f"Convex hull: {len(hull_verts)} vertices")
 
-frame_num = bpy.context.scene.frame_start
-frame_curr = bpy.context.scene.frame_current
-frames_processed = 0
 
-t_frame_set = 0.0
-t_depsgraph = 0.0
+def get_location_fcurves(obj):
+    """
+    Return location FCurves for obj.
+    Handles both legacy actions (Blender < 4.4, action.fcurves) and
+    layered/slotted actions (Blender 4.4+, action.layers → strips → channelbag).
+    """
+    if not (obj.animation_data and obj.animation_data.action):
+        return []
+    action = obj.animation_data.action
+    if hasattr(action, 'layers'):
+        slot = obj.animation_data.action_slot
+        result = []
+        for layer in action.layers:
+            for strip in layer.strips:
+                cb = strip.channelbag(slot)
+                if cb:
+                    result.extend(fc for fc in cb.fcurves if fc.data_path == 'location')
+        return result
+    return [fc for fc in action.fcurves if fc.data_path == 'location']
+
+
+def eval_matrix_at_frame(obj, frame):
+    """
+    Compute an object's world matrix at a given frame using fcurve evaluation,
+    without calling frame_set. Handles arbitrary parent chains.
+
+    Assumes only location is animated; rotation and scale are taken from the
+    object's current values (i.e. they don't change between frames).
+    Does NOT evaluate constraints — use correction matrices (see below) to
+    account for constraint-driven offsets that aren't visible via .parent.
+    """
+    loc = list(obj.location)
+    for fc in get_location_fcurves(obj):
+        loc[fc.array_index] = fc.evaluate(frame)
+
+    mat = obj.matrix_basis.copy()
+    mat.translation = loc
+
+    if obj.parent:
+        return eval_matrix_at_frame(obj.parent, frame) @ obj.matrix_parent_inverse @ mat
+    return mat
+
+
+# Correction matrices capture any constraint-driven offsets (e.g. "Child Of")
+# that aren't visible through .parent and therefore not handled by eval_matrix_at_frame.
+# Computed once at frame_start using Blender's fully evaluated world matrices.
+# Valid as long as constraint targets don't animate between frames.
+ref_frame = bpy.context.scene.frame_start
+anchor_correction = anchor.evaluated_get(depsgraph).matrix_world @ eval_matrix_at_frame(anchor, ref_frame).inverted()
+source_correction = source_object.evaluated_get(depsgraph).matrix_world @ eval_matrix_at_frame(source_object, ref_frame).inverted()
+
+frame_num = bpy.context.scene.frame_start
+frames_processed = 0
+closest_distance = float('inf')
+closest_frame = None
+
 t_matrices = 0.0
 t_bvh_query = 0.0
 
@@ -85,17 +140,16 @@ if enable_report:
 while frame_num <= bpy.context.scene.frame_end:
 
     t0 = time.perf_counter()
-    bpy.context.scene.frame_set(frame_num)
+    anchor_matrix = anchor_correction @ eval_matrix_at_frame(anchor, frame_num)
+    source_matrix_inv = (source_correction @ eval_matrix_at_frame(source_object, frame_num)).inverted()
     t1 = time.perf_counter()
-    depsgraph = bpy.context.evaluated_depsgraph_get()
-    t2 = time.perf_counter()
-    anchor_matrix = anchor.evaluated_get(depsgraph).matrix_world
-    source_matrix_inv = source_object.evaluated_get(depsgraph).matrix_world.inverted()
-    t3 = time.perf_counter()
 
+    min_distance = float('inf')
     for v_co in hull_verts:
         local_pos = source_matrix_inv @ (anchor_matrix @ v_co)
         _, _, _, distance = source_bvh.find_nearest(local_pos)
+        if distance is not None and distance < min_distance:
+            min_distance = distance
         if distance is not None and distance <= local_collision_margin:
             for obj in target_objects:
                 obj[attribute_name] = frame_num
@@ -103,18 +157,20 @@ while frame_num <= bpy.context.scene.frame_end:
                 print(f"Collision detected at frame {frame_num}")
             break
 
-    t4 = time.perf_counter()
+    t2 = time.perf_counter()
 
-    t_frame_set  += t1 - t0
-    t_depsgraph  += t2 - t1
-    t_matrices   += t3 - t2
-    t_bvh_query  += t4 - t3
+    t_matrices  += t1 - t0
+    t_bvh_query += t2 - t1
     frames_processed += 1
 
-    if enable_report:
-        print(f"Frame {frame_num} | frame_set={t1-t0:.4f}s  depsgraph={t2-t1:.4f}s  matrices={t3-t2:.4f}s  bvh={t4-t3:.4f}s")
+    if min_distance < closest_distance:
+        closest_distance = min_distance
+        closest_frame = frame_num
 
-    # Exit after timing the collision frame too
+    if enable_report:
+        anchor_pos = anchor_matrix.translation
+        print(f"Frame {frame_num} | anchor=({anchor_pos.x:.4f}, {anchor_pos.y:.4f}, {anchor_pos.z:.4f})  min_dist={min_distance:.4f}  threshold={local_collision_margin:.4f} | matrices={t1-t0:.4f}s  bvh={t2-t1:.4f}s")
+
     if distance is not None and distance <= local_collision_margin:
         break
 
@@ -123,11 +179,10 @@ while frame_num <= bpy.context.scene.frame_end:
 if frames_processed:
     n = frames_processed
     print(f"\n--- Timing summary ({n} frame(s)) ---")
-    print(f"  frame_set:  {t_frame_set:.3f}s total  ({t_frame_set/n*1000:.1f}ms avg)")
-    print(f"  depsgraph:  {t_depsgraph:.3f}s total  ({t_depsgraph/n*1000:.1f}ms avg)")
-    print(f"  matrices:   {t_matrices:.3f}s total  ({t_matrices/n*1000:.1f}ms avg)")
-    print(f"  bvh query:  {t_bvh_query:.3f}s total  ({t_bvh_query/n*1000:.1f}ms avg)")
-    print(f"  total:      {t_frame_set+t_depsgraph+t_matrices+t_bvh_query:.3f}s")
+    print(f"  matrices:   {t_matrices:.3f}s total  ({t_matrices/n*1000:.2f}ms avg)")
+    print(f"  bvh query:  {t_bvh_query:.3f}s total  ({t_bvh_query/n*1000:.2f}ms avg)")
+    print(f"  total:      {t_matrices+t_bvh_query:.3f}s")
+    print(f"  closest measured distance: {closest_distance:.6f} (source local) at frame {closest_frame}")
 
 bpy.context.scene.frame_set(frame_curr)
 print("Processing completed successfully.")
