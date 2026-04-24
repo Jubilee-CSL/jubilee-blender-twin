@@ -45,14 +45,25 @@ collision_margin = 0.005
 #   CandidateMode.COLLECTION_INDIVIDUAL — collection with each mesh checked separately
 candidates = [
     CollisionCandidate(
-        name="wellplate",
-        mode=CandidateMode.SINGLE,
-        object_name="greiner_24_wellplate_3300ul",
+        name="deck",
+        mode=CandidateMode.COLLECTION_INDIVIDUAL,
+        collection_name="deck",
+    ),
+#    CollisionCandidate(
+#        name="tools",
+#        mode=CandidateMode.COLLECTION_INDIVIDUAL,
+#        collection_name="tools",
+#    ),
+    
+    CollisionCandidate(
+        name="base_plate",
+        mode=CandidateMode.COLLECTION_INDIVIDUAL,
+        collection_name="base_plate",
     ),
     CollisionCandidate(
-        name="xy-carriage",
+        name="gantry",
         mode=CandidateMode.COLLECTION_INDIVIDUAL,
-        collection_name="XY-carriage",
+        collection_name="gantry",
     ),
 ]
 
@@ -60,7 +71,10 @@ candidates = [
 #   bvh_side   — provides the surface (richer geometry goes here)
 #   vertex_side — provides the query points (simpler / smaller goes here)
 collision_pairs = [
-    ("wellplate", "xy-carriage"),
+    ("gantry", "deck"),
+    ("base_plate", "gantry"),
+#    ("tools", "base_plate"),
+#    ("tools", "deck"),
 ]
 
 # ---------------------------------------------------------------------------
