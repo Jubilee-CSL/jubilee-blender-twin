@@ -10,12 +10,15 @@ Run as:
 Outputs pathout.csv in the current working directory, with one x,y,z row per step.
 """
 import sys
+import os
 import numpy as np
 from gcode_handlers import parse_command, GCodeMachine
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Maximum mm between consecutive output positions. Larger values produce fewer
 # rows (coarser animation); smaller values produce more rows (smoother animation).
-DEFAULT_DISTANCE_PER_STEP = 100.0
+DEFAULT_DISTANCE_PER_STEP = 1.0
 
 
 def build_path(lines: list[str], distance_per_step: float) -> list[np.ndarray]:
@@ -58,7 +61,7 @@ def build_path(lines: list[str], distance_per_step: float) -> list[np.ndarray]:
 
 
 def main():
-    fn = sys.argv[1] if len(sys.argv) > 1 else 'path.gcode'
+    fn = sys.argv[1] if len(sys.argv) > 1 else os.path.join(SCRIPT_DIR, 'path.gcode')
     try:
         distance_per_step = float(sys.argv[2])
     except (IndexError, ValueError):
@@ -71,7 +74,7 @@ def main():
 
     # Write x,y,z rows (feedrate is internal-only and not needed downstream).
     # Newlines are written before each row rather than after to avoid a trailing newline.
-    with open('pathout.csv', 'w') as f2:
+    with open(os.path.join(SCRIPT_DIR, 'pathout.csv'), 'w') as f2:
         for i, pos in enumerate(path):
             if i != 0:
                 f2.write('\n')
