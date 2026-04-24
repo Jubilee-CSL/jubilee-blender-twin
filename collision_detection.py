@@ -219,11 +219,19 @@ class CollisionEvent:
     distance : float
         The minimum proximity measured for this pair at this frame, in the BVH
         object's local-space units. Will be ≤ ``collision_margin`` (converted
-        to local units) since this event represents a detected collision.
+        to local units) for proximity events; for penetration events it is the
+        distance from the hull vertex to the nearest interior face (positive,
+        but the vertex has crossed the surface).
+    kind : str
+        ``"proximity"`` — a hull vertex came within ``collision_margin`` of the
+        surface without crossing it.
+        ``"penetration"`` — a hull vertex has crossed through the surface and
+        is inside the mesh (detected via outward face-normal sign flip).
     """
     frame: int
     pair: tuple
     distance: float
+    kind: str
 
 
 @dataclass
@@ -250,6 +258,14 @@ class DetectionResult:
     closest_frame : int or None
         The frame at which ``closest_distance`` was measured. ``None`` when no
         frames were processed.
+    furthest_distance : float
+        The maximum proximity measured across all non-sphere-rejected frames and
+        pairs, in the BVH object's local-space units. Large values here indicate
+        frames where the bounding-sphere fast-reject did not fire but the objects
+        were still far apart.
+    furthest_frame : int or None
+        The frame at which ``furthest_distance`` was measured. ``None`` when no
+        non-rejected frames were processed.
     frames_processed : int
         How many frames were actually evaluated before the function returned.
     t_matrices : float
@@ -260,6 +276,8 @@ class DetectionResult:
     collisions: list
     closest_distance: float
     closest_frame: int | None
+    furthest_distance: float
+    furthest_frame: int | None
     frames_processed: int
     t_matrices: float
     t_bvh: float
@@ -276,6 +294,9 @@ class _BVHEntry:
     bvh: object          # BVHTree
     correction: object   # mathutils.Matrix — constraint-offset captured at ref frame
     local_margin: float  # collision_margin converted to obj-local units
+    centroid_local: object  # mathutils.Vector — hull centroid in obj-local space
+    world_radius: float     # bounding-sphere radius in world units
+    world_margin: float     # collision_margin in world units
 
 
 @dataclass
@@ -284,6 +305,8 @@ class _VertexEntry:
     anchor: object   # bpy.types.Object — the coordinate frame for verts
     verts: list      # list[mathutils.Vector] — convex hull vertices, anchor-local
     correction: object  # mathutils.Matrix — constraint correction for anchor
+    centroid_local: object  # mathutils.Vector — hull centroid in anchor-local space
+    world_radius: float     # bounding-sphere radius in world units
 
 
 @dataclass
@@ -522,6 +545,24 @@ def _compute_local_margin(obj, depsgraph, margin):
     return margin / scale.x
 
 
+def _compute_bounding_sphere(hull_verts, anchor, depsgraph):
+    """
+    Return ``(centroid_local, world_radius)`` for a set of hull vertices.
+
+    centroid_local — mean of *hull_verts* expressed in *anchor*-local space.
+    world_radius   — maximum world-space distance from the world centroid to any
+                     hull vertex, evaluated at the reference frame. Constant across
+                     frames because only translation is animated (scale/rotation are
+                     fixed), so a point's distance from the centroid is invariant.
+    """
+    from mathutils import Vector
+    centroid_local = sum(hull_verts, Vector()) / len(hull_verts)
+    anchor_world = anchor.evaluated_get(depsgraph).matrix_world
+    centroid_world = anchor_world @ centroid_local
+    world_radius = max((anchor_world @ v - centroid_world).length for v in hull_verts)
+    return centroid_local, world_radius
+
+
 def _prepare_candidate(candidate, depsgraph, margin):
     """
     Build the internal :class:`_PreparedCandidate` for *candidate*.
@@ -553,12 +594,15 @@ def _prepare_candidate(candidate, depsgraph, margin):
         bvh = _build_object_bvh(obj, depsgraph)
         # Convex hull for the vertex side (fewer query points per frame).
         _, hull_verts = _build_hull_geometry([obj], anchor=obj, depsgraph=depsgraph)
+        centroid_local, world_radius = _compute_bounding_sphere(hull_verts, obj, depsgraph)
         return _PreparedCandidate(
             name=candidate.name,
-            bvh_entries=[_BVHEntry(obj=obj, bvh=bvh,
-                                   correction=correction, local_margin=local_margin)],
-            vertex_entries=[_VertexEntry(anchor=obj, verts=hull_verts,
-                                         correction=correction)],
+            bvh_entries=[_BVHEntry(obj=obj, bvh=bvh, correction=correction,
+                                   local_margin=local_margin, centroid_local=centroid_local,
+                                   world_radius=world_radius, world_margin=margin)],
+            vertex_entries=[_VertexEntry(anchor=obj, verts=hull_verts, correction=correction,
+                                         centroid_local=centroid_local,
+                                         world_radius=world_radius)],
         )
 
     elif mode == CandidateMode.COLLECTION_HULL:
@@ -570,12 +614,15 @@ def _prepare_candidate(candidate, depsgraph, margin):
         # Both the BVH and the vertex set come from the same combined hull.
         hull_bvh, hull_verts = _build_hull_geometry(objects, anchor=anchor,
                                                      depsgraph=depsgraph)
+        centroid_local, world_radius = _compute_bounding_sphere(hull_verts, anchor, depsgraph)
         return _PreparedCandidate(
             name=candidate.name,
-            bvh_entries=[_BVHEntry(obj=anchor, bvh=hull_bvh,
-                                   correction=correction, local_margin=local_margin)],
-            vertex_entries=[_VertexEntry(anchor=anchor, verts=hull_verts,
-                                          correction=correction)],
+            bvh_entries=[_BVHEntry(obj=anchor, bvh=hull_bvh, correction=correction,
+                                   local_margin=local_margin, centroid_local=centroid_local,
+                                   world_radius=world_radius, world_margin=margin)],
+            vertex_entries=[_VertexEntry(anchor=anchor, verts=hull_verts, correction=correction,
+                                          centroid_local=centroid_local,
+                                          world_radius=world_radius)],
         )
 
     elif mode == CandidateMode.COLLECTION_INDIVIDUAL:
@@ -588,10 +635,15 @@ def _prepare_candidate(candidate, depsgraph, margin):
             local_margin = _compute_local_margin(obj, depsgraph, margin)
             bvh = _build_object_bvh(obj, depsgraph)
             _, hull_verts = _build_hull_geometry([obj], anchor=obj, depsgraph=depsgraph)
-            bvh_entries.append(_BVHEntry(obj=obj, bvh=bvh,
-                                          correction=correction, local_margin=local_margin))
+            centroid_local, world_radius = _compute_bounding_sphere(hull_verts, obj, depsgraph)
+            bvh_entries.append(_BVHEntry(obj=obj, bvh=bvh, correction=correction,
+                                          local_margin=local_margin,
+                                          centroid_local=centroid_local,
+                                          world_radius=world_radius, world_margin=margin))
             vertex_entries.append(_VertexEntry(anchor=obj, verts=hull_verts,
-                                                correction=correction))
+                                                correction=correction,
+                                                centroid_local=centroid_local,
+                                                world_radius=world_radius))
         return _PreparedCandidate(
             name=candidate.name,
             bvh_entries=bvh_entries,
@@ -645,41 +697,134 @@ def _check_pair(a_prep, b_prep, frame):
     """
     min_distance = float('inf')
     collision = False
+    kind = None
     t_matrices = 0.0
     t_bvh = 0.0
 
     for bvh_e in a_prep.bvh_entries:
         t0 = time.perf_counter()
-        obj_matrix_inv = (bvh_e.correction @ _eval_matrix_at_frame(bvh_e.obj, frame)).inverted()
-        t1 = time.perf_counter()
-        t_matrices += t1 - t0
+        bvh_matrix = bvh_e.correction @ _eval_matrix_at_frame(bvh_e.obj, frame)
+        bvh_center_world = bvh_matrix @ bvh_e.centroid_local
+        obj_matrix_inv = bvh_matrix.inverted()
+        t_matrices += time.perf_counter() - t0
 
         for vert_e in b_prep.vertex_entries:
             t0 = time.perf_counter()
             anchor_matrix = vert_e.correction @ _eval_matrix_at_frame(vert_e.anchor, frame)
-            t1 = time.perf_counter()
-            t_matrices += t1 - t0
+            vert_center_world = anchor_matrix @ vert_e.centroid_local
+
+            # Layer 1 — bounding sphere fast-reject.
+            # If the closest the two spheres can be is already beyond the margin,
+            # no hull vertex can be within the margin of any surface point.
+            sphere_gap = (bvh_center_world - vert_center_world).length - \
+                         bvh_e.world_radius - vert_e.world_radius
+            t_matrices += time.perf_counter() - t0
+            if sphere_gap > bvh_e.world_margin:
+                continue  # objects too far apart — skip all BVH queries for this pair
 
             t0 = time.perf_counter()
             for v_co in vert_e.verts:
                 # anchor-local → world → BVH-local
                 local_pos = obj_matrix_inv @ (anchor_matrix @ v_co)
-                _, _, _, dist = bvh_e.bvh.find_nearest(local_pos)
+                # Limit the search to local_margin so find_nearest never returns a
+                # face farther than the threshold. This prevents the normal-sign check
+                # below from producing false positives on concave meshes, where a
+                # distant back-facing face can yield a negative dot product even for
+                # exterior points.
+                #
+                # TODO: deep penetration (hull vertex tunnels more than local_margin
+                # through the surface in a single frame step) is not detected by this
+                # approach. The correct fix is a ray-cast parity test: cast a ray from
+                # local_pos in a fixed direction, count BVH crossings via a chain of
+                # bvh.ray_cast() calls stepping past each hit, and flag odd counts as
+                # inside. That approach is correct for arbitrary non-convex geometry but
+                # requires multiple BVH calls per vertex.
+                location, normal, index, dist = bvh_e.bvh.find_nearest(
+                    local_pos, bvh_e.local_margin)
                 if dist is not None:
                     if dist < min_distance:
                         min_distance = dist
-                    if dist <= bvh_e.local_margin:
-                        collision = True
-                        break  # stop scanning verts for this BVH/vertex entry pair
-            t1 = time.perf_counter()
-            t_bvh += t1 - t0
+                    collision = True
+                    # dist <= local_margin is guaranteed by the search radius above.
+                    # Use the face normal to classify: a negative dot product means the
+                    # query point is on the interior side of the nearest face.
+                    if normal is not None and (local_pos - location).dot(normal) < 0:
+                        kind = "penetration"
+                    else:
+                        kind = "proximity"
+                    break
+            t_bvh += time.perf_counter() - t0
 
             if collision:
                 break  # stop scanning b vertex entries
         if collision:
             break  # stop scanning a BVH entries
 
-    return collision, min_distance, t_matrices, t_bvh
+    return collision, kind, min_distance, t_matrices, t_bvh
+
+
+# ---------------------------------------------------------------------------
+# Private: Collision highlighting
+# ---------------------------------------------------------------------------
+
+def _apply_collision_highlights(collisions, resolved_pairs, f_start, f_end, collision_color):
+    """
+    Keyframe object colors to visually mark collision frames in the timeline.
+
+    For each object involved in at least one collision event, inserts keyframes
+    that set it to *collision_color* on collision frames and restore its
+    original color one frame before and after each contiguous run, producing an
+    instant step-function switch with no interpolation ramp.
+
+    Limitation: for COLLECTION_HULL candidates only the anchor object (the
+    first mesh in the collection) is highlighted, not every mesh in the
+    collection.
+    """
+    if not collisions:
+        return
+
+    name_to_prep = {}
+    for a_prep, b_prep in resolved_pairs:
+        name_to_prep[a_prep.name] = a_prep
+        name_to_prep[b_prep.name] = b_prep
+
+    # Accumulate collision frames per object, deduplicating by id().
+    frames_by_obj = {}  # id(obj) -> (obj, set[int])
+    for event in collisions:
+        for cand_name in event.pair:
+            prep = name_to_prep[cand_name]
+            objs = ([e.obj   for e in prep.bvh_entries]
+                  + [e.anchor for e in prep.vertex_entries])
+            for obj in objs:
+                key = id(obj)
+                if key not in frames_by_obj:
+                    frames_by_obj[key] = (obj, set())
+                frames_by_obj[key][1].add(event.frame)
+
+    for obj, frames in frames_by_obj.values():
+        normal_color  = tuple(obj.color)
+        sorted_frames = sorted(frames)
+
+        # Baseline: normal color at the start of the checked range.
+        obj.color = normal_color
+        obj.keyframe_insert(data_path="color", frame=f_start)
+
+        for i, frame in enumerate(sorted_frames):
+            is_run_start = i == 0 or sorted_frames[i - 1] != frame - 1
+            is_run_end   = i == len(sorted_frames) - 1 or sorted_frames[i + 1] != frame + 1
+
+            if is_run_start:
+                # Normal keyframe one frame before the run so the color snaps
+                # to red rather than interpolating from the previous keyframe.
+                if frame - 1 >= f_start:
+                    obj.color = normal_color
+                    obj.keyframe_insert(data_path="color", frame=frame - 1)
+                obj.color = collision_color
+                obj.keyframe_insert(data_path="color", frame=frame)
+
+            if is_run_end and frame + 1 <= f_end:
+                obj.color = normal_color
+                obj.keyframe_insert(data_path="color", frame=frame + 1)
 
 
 # ---------------------------------------------------------------------------
@@ -755,6 +900,7 @@ def detect_collisions(
     frame_end=None,
     early_exit=True,
     attribute_name="Collision Frame",
+    collision_color=(1.0, 0.0, 0.0, 1.0),
     log_level=LogLevel.SUMMARY,
 ):
     """
@@ -821,6 +967,22 @@ def detect_collisions(
 
         Set to ``None`` to suppress all custom-property writes (pure library
         mode). Default ``"Collision Frame"``.
+
+    collision_color : tuple[float, float, float, float] or None, optional
+        RGBA color to keyframe on colliding objects for each collision frame.
+        Each channel is in the range ``[0.0, 1.0]``. The object's original
+        color is restored on the frame immediately before and after each
+        contiguous run of collision frames, creating a step-function highlight
+        visible in the viewport and timeline.
+
+        Set to ``None`` to suppress all color keyframing. Default
+        ``(1.0, 0.0, 0.0, 1.0)`` (opaque red).
+
+        .. note::
+            For ``COLLECTION_HULL`` candidates only the anchor object (the
+            first mesh in the collection) is highlighted. For
+            ``COLLECTION_INDIVIDUAL`` and ``SINGLE`` every mesh object
+            involved in a collision event is highlighted individually.
 
     log_level : LogLevel, optional
         Controls console verbosity. See :class:`LogLevel`. Default ``SUMMARY``.
@@ -911,6 +1073,8 @@ def detect_collisions(
     frames_processed = 0
     closest_distance = float('inf')
     closest_frame    = None
+    furthest_distance = 0.0
+    furthest_frame    = None
     collisions       = []
     t_matrices_total = 0.0
     t_bvh_total      = 0.0
@@ -922,7 +1086,7 @@ def detect_collisions(
         frame_collision  = False
 
         for a_prep, b_prep in resolved_pairs:
-            hit, min_dist, t_mat, t_bvh = _check_pair(a_prep, b_prep, frame_num)
+            hit, kind, min_dist, t_mat, t_bvh = _check_pair(a_prep, b_prep, frame_num)
             frame_t_matrices += t_mat
             frame_t_bvh      += t_bvh
 
@@ -932,12 +1096,12 @@ def detect_collisions(
             if hit:
                 frame_collision = True
                 event = CollisionEvent(frame=frame_num, pair=(a_prep.name, b_prep.name),
-                                       distance=min_dist)
+                                       distance=min_dist, kind=kind)
                 collisions.append(event)
 
                 if log_level.value >= LogLevel.COLLISIONS.value:
                     print(f"[collision_detection] Collision at frame {frame_num} — "
-                          f"'{a_prep.name}' vs '{b_prep.name}'")
+                          f"'{a_prep.name}' vs '{b_prep.name}' [{kind}]")
 
                 if attribute_name is not None:
                     for bvh_e in a_prep.bvh_entries:
@@ -960,6 +1124,10 @@ def detect_collisions(
             closest_distance = frame_min_dist
             closest_frame    = frame_num
 
+        if frame_min_dist != float('inf') and frame_min_dist > furthest_distance:
+            furthest_distance = frame_min_dist
+            furthest_frame    = frame_num
+
         if log_level.value >= LogLevel.VERBOSE.value:
             print(f"  frame {frame_num:>5} | min_dist={frame_min_dist:.6f} | "
                   f"matrices={frame_t_matrices:.4f}s  bvh={frame_t_bvh:.4f}s")
@@ -972,6 +1140,10 @@ def detect_collisions(
     # Restore timeline to where it was before this call.
     scene.frame_set(frame_curr)
 
+    if collision_color is not None:
+        _apply_collision_highlights(
+            collisions, resolved_pairs, f_start, f_end, collision_color)
+
     # ── Summary output ─────────────────────────────────────────────────────
     if log_level.value >= LogLevel.SUMMARY.value and frames_processed:
         n = frames_processed
@@ -983,15 +1155,23 @@ def detect_collisions(
               f"({t_bvh_total / n * 1000:.2f}ms avg)")
         print(f"  total    : {t_matrices_total + t_bvh_total:.3f}s")
         print(f"  closest  : {closest_distance:.6f} (BVH-local) at frame {closest_frame}")
+        print(f"  furthest : {furthest_distance:.6f} (BVH-local) at frame {furthest_frame}")
         if collisions:
+            proximity    = [e for e in collisions if e.kind == "proximity"]
+            penetrations = [e for e in collisions if e.kind == "penetration"]
+            kind_summary = (f"{len(proximity)} proximity"
+                            + (f", {len(penetrations)} penetration"
+                               if penetrations else ""))
             first   = collisions[0]
             last    = collisions[-1]
-            nearest = min(collisions, key=lambda e: e.distance)
+            nearest  = min(collisions, key=lambda e: e.distance)
+            furthest_collision = max(collisions, key=lambda e: e.distance)
             avg_dist = sum(e.distance for e in collisions) / len(collisions)
-            print(f"  collisions ({len(collisions)} frame(s)):")
-            print(f"    first   : frame {first.frame}, dist={first.distance:.6f}")
-            print(f"    last    : frame {last.frame}, dist={last.distance:.6f}")
-            print(f"    closest : frame {nearest.frame}, dist={nearest.distance:.6f}")
+            print(f"  collisions ({len(collisions)} frame(s) — {kind_summary}):")
+            print(f"    first    : frame {first.frame}, dist={first.distance:.6f} [{first.kind}]")
+            print(f"    last     : frame {last.frame}, dist={last.distance:.6f} [{last.kind}]")
+            print(f"    closest  : frame {nearest.frame}, dist={nearest.distance:.6f} [{nearest.kind}]")
+            print(f"    furthest : frame {furthest_collision.frame}, dist={furthest_collision.distance:.6f} [{furthest_collision.kind}]")
             print(f"    average distance: {avg_dist:.6f}")
         else:
             print("  no collisions detected.")
@@ -1000,6 +1180,8 @@ def detect_collisions(
         collisions=collisions,
         closest_distance=closest_distance,
         closest_frame=closest_frame,
+        furthest_distance=furthest_distance,
+        furthest_frame=furthest_frame,
         frames_processed=frames_processed,
         t_matrices=t_matrices_total,
         t_bvh=t_bvh_total,

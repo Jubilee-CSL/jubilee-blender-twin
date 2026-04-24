@@ -36,7 +36,7 @@ from collision_detection import (
 # to be colliding. Tune this using the "closest measured distance" value
 # printed in the summary (divide by obj.scale.x to convert to world metres
 # if the object has a non-unit scale).
-collision_margin = 0.005
+collision_margin = 0.001
 
 # Each CollisionCandidate defines one participant.
 # mode options:
@@ -45,9 +45,9 @@ collision_margin = 0.005
 #   CandidateMode.COLLECTION_INDIVIDUAL — collection with each mesh checked separately
 candidates = [
     CollisionCandidate(
-        name="wellplate",
+        name="deck_items",
         mode=CandidateMode.SINGLE,
-        object_name="greiner_24_wellplate_3300ul",
+        object_name="deck",
     ),
     CollisionCandidate(
         name="xy-carriage",
@@ -60,7 +60,7 @@ candidates = [
 #   bvh_side   — provides the surface (richer geometry goes here)
 #   vertex_side — provides the query points (simpler / smaller goes here)
 collision_pairs = [
-    ("wellplate", "xy-carriage"),
+    ("deck_items", "xy-carriage"),
 ]
 
 # ---------------------------------------------------------------------------
