@@ -100,6 +100,11 @@ The `test_python/` folder contains small scripts that exercise the digital twin:
 - `test_z_move.py`
   - Quick test moving `Z-axis` in +Z over a short frame range.
 
+- `Collision-Detection-Script.py`
+  - Scans the animation frame-by-frame and reports the first (or all) frames
+    where two sets of objects come within a configurable distance of each other.
+  - See [Collision detection](#collision-detection) below for full details.
+
 - `animation_to_gif.py`
   - Config‑driven script (reads `animation_config.json` if present).
   - Sets camera, lighting/brightness, resolution, renders a PNG frame sequence and converts it to a GIF (`docs/jubilee_test.gif`) via `ffmpeg`.
@@ -129,6 +134,183 @@ All scripts expect axis‑object names:
 - Axis minimum positions are read from Blender's axis constraints (LIMIT_LOCATION).
 - The animation speed can be adjusted by changing `SPEED_FACTOR` in `from_gcode/animate_path.py`.
 - The scene's end frame is set automatically to fit the animation.
+
+
+## Collision detection
+
+`collision_detection.py` scans an animation frame-by-frame and reports whether
+— and when — two sets of objects come within a configurable distance of each
+other. It is designed for lab-automation scenes where detecting tool collisions
+with the deck or labware is safety-critical.
+
+`test_python/Collision-Detection-Script.py` is the ready-to-run entry point
+that imports the library and defines which objects to check.
+
+### Quick start
+
+1. Open `jubilee.blend` in Blender.
+2. Open the **Text Editor** and load `test_python/Collision-Detection-Script.py`.
+3. Edit the CONFIG section (see below) to name the objects or collections you
+   want to check.
+4. Press **Run Script**. Results are printed to the console and written as
+   custom properties on the colliding objects (visible in the Properties panel
+   under **Object Properties → Custom Properties**).
+
+Or run headlessly from the command line:
+
+```bash
+blender jubilee.blend --python test_python/Collision-Detection-Script.py
+```
+
+### Configuring candidates and pairs
+
+The CONFIG section at the top of `Collision-Detection-Script.py` has two parts.
+
+**Candidates** — the objects or collections to track:
+
+```python
+candidates = [
+    CollisionCandidate(
+        name="gantry",                          # label used in output and pairs
+        mode=CandidateMode.COLLECTION_INDIVIDUAL,
+        collection_name="gantry",               # exact Blender collection name
+    ),
+    CollisionCandidate(
+        name="deck",
+        mode=CandidateMode.COLLECTION_INDIVIDUAL,
+        collection_name="deck",
+    ),
+]
+```
+
+Three candidate modes are available:
+
+| Mode | When to use |
+|---|---|
+| `SINGLE` | One named mesh object |
+| `COLLECTION_HULL` | A collection treated as one rigid convex shell — fastest for multi-object groups that move together |
+| `COLLECTION_INDIVIDUAL` | A collection where each mesh is checked separately — use when you need to know *which* part collided |
+
+**Pairs** — which candidates to check against each other:
+
+```python
+collision_pairs = [
+    ("gantry", "deck"),       # (surface side, query side)
+    ("base_plate", "gantry"),
+]
+```
+
+The first name in each pair provides the surface geometry; the second provides
+the set of query points. As a rule of thumb, put the geometrically richer
+object first.
+
+**Margin** — the proximity threshold in world-space metres at which two
+candidates are considered to be colliding:
+
+```python
+collision_margin = 0.001   # 1 mm
+```
+
+Tune this using the `closest` value printed in the summary after a run.
+
+### Understanding the output
+
+After the script runs, the console prints a summary:
+
+```
+[collision_detection] --- Summary (500 frame(s), 2 pair(s)) ---
+  matrices : 0.142s total  (0.28ms avg)
+  bvh      : 0.031s total  (0.06ms avg)
+  total    : 0.173s
+  closest  : 0.000823 (BVH-local) at frame 214
+  furthest : 1.482000 (BVH-local) at frame 1
+  collisions (12 frame(s) — 10 proximity, 2 penetration):
+    first    : frame 214, dist=0.000823 [proximity]
+    last     : frame 225, dist=0.001204 [proximity]
+    closest  : frame 214, dist=0.000823 [proximity]
+    furthest : frame 219, dist=0.003100 [penetration]
+    average distance: 0.001540
+```
+
+- **closest / furthest** (general) — the minimum and maximum proximity measured
+  across all non-sphere-rejected frames. `closest` is the key tuning value;
+  if it is much smaller than `collision_margin` you can tighten the margin.
+- **proximity** collision — a hull vertex came within `collision_margin` of the
+  surface without crossing it.
+- **penetration** collision — a hull vertex has crossed through the surface and
+  is inside the mesh.
+- Distances are in the BVH object's **local-space units**, which differ from
+  world-space metres when the object has a non-unit scale (common when models
+  are authored in millimetres at 0.001 scale). Divide by `obj.scale.x` to
+  convert.
+
+Each object involved in a collision also receives a `"Collision Frame"` custom
+property (the name is configurable via `attribute_name`) set to the first frame
+on which it collided.
+
+### Visual highlighting
+
+By default, every object that collides is keyframed **red** on its collision
+frames and restored to its original color immediately before and after each
+contiguous run of collision frames. Scrub the timeline to see which objects
+are red and when.
+
+To change the highlight color, pass `collision_color` to `detect_collisions`:
+
+```python
+result = detect_collisions(
+    ...
+    collision_color=(1.0, 0.5, 0.0, 1.0),   # orange
+)
+```
+
+Pass `collision_color=None` to disable keyframing entirely.
+
+> **Viewport note:** The color is written to each object's **Object Color**
+> property. To see it in the viewport, switch Solid shading to **Object**
+> color mode (the dropdown in the top-right of the 3D viewport header).
+
+### How it works
+
+The library is designed to evaluate thousands of frames per second by avoiding
+Blender's `frame_set()` call (which triggers a full dependency-graph
+evaluation, typically ~1 second per frame). Instead it reads location FCurves
+directly and reconstructs world matrices in Python.
+
+Per-frame work is kept cheap by two mechanisms:
+
+1. **Bounding sphere fast-reject** — at startup, a bounding sphere is
+   precomputed for each candidate from its convex hull. Each frame, only the
+   sphere centroids are transformed to world space and their gap checked against
+   the margin. If the spheres are too far apart, all BVH queries for that pair
+   are skipped entirely.
+
+2. **Convex hull query points** — rather than testing every vertex of a mesh,
+   the library computes each candidate's convex hull at startup and uses only
+   those hull vertices as query points. This is conservative: if no hull vertex
+   is within the margin, nothing inside the hull can be either.
+
+For pairs that pass the sphere check, each hull vertex is transformed into the
+BVH object's local space and tested with `BVHTree.find_nearest()` (capped at
+`collision_margin`). If the returned face normal indicates the vertex is on the
+interior side of the surface, the event is classified as a penetration rather
+than a proximity collision.
+
+### Known limitations
+
+- **Rotation and scale animation** — only location FCurves are read. Objects
+  that rotate or scale during the animation are not supported; the library
+  assumes constant rotation and scale.
+- **Deforming meshes** — shape keys, cloth simulation, and particle systems are
+  not supported. BVH trees are built once at `frame_start`.
+- **Deep tunneling** — if an object moves fast enough to skip more than one
+  `collision_margin` through a surface in a single frame step, the crossing
+  may not be detected. A future fix would use a ray-cast parity test (counting
+  BVH crossings along a ray from the query point) to detect interior points
+  regardless of depth.
+- **COLLECTION_HULL highlighting** — visual color keyframing only highlights the
+  anchor object (the first mesh in the collection), not all meshes, when using
+  the `COLLECTION_HULL` mode.
 
 
 ## Animating the Jubilee with G-code
