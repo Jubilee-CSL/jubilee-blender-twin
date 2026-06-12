@@ -1,39 +1,11 @@
 
 """
-import bpy
-import numpy as np
-
-scene = bpy.context.scene
-f_start = frame_start if frame_start is not None else scene.frame_start
-f_end   = frame_end   if frame_end   is not None else scene.frame_end
-
-
-frame_curr = scene.frame_current
-scene.frame_set(f_start)
-depsgraph = bpy.context.evaluated_depsgraph_get()
-
-frame_num = f_start
-while frame_num <= f_end:
-    for obj in bpy.data.meshes:
-        
-        
-        
-
-scene.frame_set(frame_curr)
-"""
-
-"""
-animate_path.py
-Blender Python script that reads pathout.csv and inserts one keyframe per row
-on the X-axis, Y-axis, and Z-axis scene objects.
+ray_tracing_test.py
+Based on animate_path.py
 
 Run via the Blender CLI:
-    blender jubilee.blend --python animate_path.py
+    blender jubilee.blend --python ray_tracing_test.py
 
-The script expects three objects named 'X-axis', 'Y-axis', and 'Z-axis' in the
-scene.  Z-axis is optional; X-axis and Y-axis are required.  Each object must
-have a LIMIT_LOCATION constraint whose bounds encode the physical travel range
-of that axis in Blender world units (metres).
 """
 
 import bpy
@@ -51,7 +23,6 @@ csv_path = bpy.path.abspath("//from_gcode/pathout.csv")
 scene = bpy.context.scene
 depsgraph = bpy.context.evaluated_depsgraph_get()
 
-# Animate 'X-axis' in X, 'Y-axis' in Y, and 'Z-axis' in Z if present
 x_axis = bpy.data.objects.get("X-axis")
 y_axis = bpy.data.objects.get("Y-axis")
 z_axis = bpy.data.objects.get("Z-axis")
@@ -60,12 +31,12 @@ if x_axis is None:
 if y_axis is None:
     raise Exception("No object named 'Y-axis' in the scene!")
 
-# Remove any existing keyframe data so the animation is rebuilt from scratch.
-for obj in [x_axis, y_axis, z_axis]:
-    if obj is not None:
-        obj.animation_data_clear()
+z_axis = bpy.data.objects.get("Z-axis")
 
-# Read interpolated positions produced by path_follower.py.
+x_min = get_axis_min(x_axis, 'X')
+y_min = get_axis_min(y_axis, 'Y')
+z_max = get_axis_max(z_axis, 'Z') if z_axis is not None else 0.0
+
 points = []
 with open(csv_path, newline='') as csvfile:
     reader = csv.reader(csvfile)
@@ -75,53 +46,71 @@ with open(csv_path, newline='') as csvfile:
 points = np.array(points)
 print(points)
 
-# Read the physical home position of each axis from its LIMIT_LOCATION constraint.
-# These offsets anchor gcode coordinate (0, 0, 0) to the correct location in
-# the Blender scene.
-x_min = get_axis_min(x_axis, 'X')
-y_min = get_axis_min(y_axis, 'Y')
-# Z home is the maximum scene Z because the bed descends as the gcode Z value rises.
-z_max = get_axis_max(z_axis, 'Z') if z_axis is not None else 0.0
-
-# Snap axes to their home positions before inserting keyframes.
-x_axis.location.x = x_min
-y_axis.location.y = y_min
-if z_axis is not None:
-    z_axis.location.z = z_max
-
-print(f"Axis minimums: X={x_min}, Y={y_min}, Z={z_max}")
-
-directions = np.zeros_like(points)
-for i in range(1,points.shape[0]):
-    print(f"index {i}")
-    print(f"test: next{points[i]} previous {points[i-1]}")
-    print(points[i]-points[i-1])
-    directions[i]=(points[i]-points[i-1])
-
-
-# Insert one keyframe per CSV row.
-# CSV values are in mm; divide by 1000 to convert to Blender's metre units.
-# Z is subtracted from z_max to invert the axis direction.
 hit=False
-for frame, (x, y, z) in enumerate(points, start=1):
-    x_axis.location.x = x/1000 + x_min
-    x_axis.keyframe_insert(data_path="location", frame=frame)
+directions = np.zeros_like(points)
+points_norm = np.zeros_like(points)
+coord_nozz = np.zeros_like(points)
+nozzle = bpy.data.objects.get("D2HW_C201H001")
 
-    y_axis.location.y = y/1000 + y_min
-    y_axis.keyframe_insert(data_path="location", frame=frame)
+scene.frame_set(1)
+bpy.context.view_layer.update()
+depsgraph = bpy.context.evaluated_depsgraph_get()
+nozzle_eval = nozzle.evaluated_get(depsgraph)
+origin_offset = nozzle_eval.matrix_world.translation.copy()
+#print(f"Origin offset: {origin_offset}")
 
-    if z_axis is not None:
-        z_axis.location.z = z_max - z/1000
-        z_axis.keyframe_insert(data_path="location", frame=frame)
+for obj_name in ["X-axis", "Y-axis", "Z-axis", "D2HW_C201H001"]:
+    obj = bpy.data.objects.get(obj_name)
+    if obj:
+        pos = obj.evaluated_get(depsgraph).matrix_world.translation
+        #print(f"{obj_name} world pos at frame 1: {pos.x:.5f}, {pos.y:.5f}, {pos.z:.5f}")
 
-    if frame != len(points):
-        bplt.Arrows(np.array([x,y,z]).T,np.array(directions[frame]).T,radius=.3,radius_ratio=3)
-        hit,loc,normal,index,object,mat=scene.ray_cast(depsgraph,(x,y,z),directions[frame])
-        if hit:
-            print(f"collision between gantry and {object.name} during frame {frame}")
+for frame, (x, y, z), i in zip(range(1,len(points)+1), points, range(len(points))):
+    scene.frame_set(frame)
+    bpy.context.view_layer.update()
+    depsgraph = bpy.context.evaluated_depsgraph_get()
 
+    nozzle_eval = nozzle.evaluated_get(depsgraph)
+    world_pos = nozzle_eval.matrix_world.translation
+
+    print(f"Frame {frame} | nozzle: {world_pos.x:.5f}, {world_pos.y:.5f}, {world_pos.z:.5f}")
+    coord_nozz[i] = [(world_pos.x), world_pos.y,(world_pos.z)]
+
+    points_norm[i] = [(x/1000 + origin_offset.x), 
+                      (y/1000 + origin_offset.y), 
+                      (origin_offset.z - z/1000)]
+    
+    print(origin_offset.x)
+    print(origin_offset.y)
     print(frame)
 
-# Extend the timeline to exactly cover the animation.
-scene = bpy.context.scene
-scene.frame_end = len(points)
+for frame, i in zip(range(1,len(points)+1), range(len(points))):
+    scene.frame_set(frame)
+    bpy.context.view_layer.update()
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+
+    if frame < len(points)-1:
+        directions[frame] = points_norm[i+1] - points_norm[i]
+            
+        direction = directions[frame]
+        norm = np.linalg.norm(direction)
+        
+        if norm > 1e-6:
+            direction_normalized = direction / norm
+        else:
+            direction_normalized = np.array([0.0, 0.0, -1.0]) 
+        
+        hit, loc, normal, index, object, mat = scene.ray_cast(
+            depsgraph, coord_nozz[i], direction_normalized
+        )
+        if hit:
+            print(f"Collision between gantry and {object.name} during frame {frame}")
+
+
+#print(f"(DEBUG) Direction Vectors:{directions}")
+#print(f"(DEBUG)Normalized coordinates : {points_norm}")
+#print(f"(DEBUG) Nozzle_coordinates:{coord_nozz}")
+
+bplt.Arrows(coord_nozz[0:9],directions[1:],color = (1,0,0),head_length=0.0001, radius=.0005,radius_ratio=2,end_trim_length=0)
+
+print("DONE")
