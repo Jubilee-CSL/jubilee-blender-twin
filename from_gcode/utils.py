@@ -24,7 +24,7 @@ def _extract_numeric_after(token: str) -> float | None:
         return None
 
 
-def find_coord(line: str, curcoord: np.ndarray, relative: bool = False) -> np.ndarray:
+def find_coord(line: str, curcoord: np.ndarray, storage: np.ndarray, relative: bool = False) -> np.ndarray:
     """Extract target coordinates from a single gcode line.
 
     Scans for X, Y, Z, and F tokens and updates the corresponding element of
@@ -39,22 +39,61 @@ def find_coord(line: str, curcoord: np.ndarray, relative: bool = False) -> np.nd
     Returns a new array; curcoord is not modified.
     """
     nl = curcoord.copy()
-    checks = ["X", "Y", "Z", "F"]
+    nl[-1] = 0.0
+
+    restored_val=np.array([0.0,0.0,0.0,0.0,0.0])
+
+    split_line = line.split(";", 1)[0]
+
+    checks = ["X", "Y", "Z", "U", "H"]
+
     for i, axis in enumerate(checks):
-        if axis in line:
+        
+        if "S" in split_line:
+
+            after = line.split("S", 1)[1]
+            val = _extract_numeric_after(after)
+
+            if axis != "F":
+                storage[int(val),i] = curcoord[i]
+                nl[i:4] = curcoord[i:4]
+
+        if "R" in split_line:
+
+            after = line.split("R", 1)[1]
+            val = _extract_numeric_after(after)
+
+            restored_val = storage[int(val)]
+            if axis in split_line:
+                recurr_line = axis + after.split(axis, 1)[1]
+                offset, storage = find_coord(recurr_line, restored_val, storage, relative=True)
+                nl[i:4] = offset[i:4]
+            else:
+                nl[i:4] = curcoord[i:4]
+            continue
+
+
+        if axis in split_line:
             after = line.split(axis, 1)[1]
             val = _extract_numeric_after(after)
             if val is not None:
-                if relative and axis != 'F':
+                if relative and axis != "T":
                     nl[i] = curcoord[i] + val
+                elif axis == "H":
+                    if val == 2 and nl[3] == 90.0:    
+                        nl[-1] = 1.0  
+                        nl[0:i] = curcoord[0:i]
+                    elif  val == 1 and nl[3] == -364.0:
+                        nl[-1] = 1.0
+                        nl[0:i] = curcoord[0:i]
                 else:
                     nl[i] = val
-    return nl
-
+    
+    return nl,storage
 
 def dis(loc1, loc2) -> float:
     """Euclidean distance between two 3-D points (only the first three elements are used)."""
-    return sqrt(sum((np.array(loc1)-np.array(loc2))[0:3]**2))
+    return sqrt(sum((np.array(loc1)-np.array(loc2))[0:5]**2))
 
 
 def get_axis_min(obj, axis: str) -> float:

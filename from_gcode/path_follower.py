@@ -31,7 +31,7 @@ def build_path(lines: list[str], distance_per_step: float) -> list[np.ndarray]:
     straight segments; smaller values produce denser paths.
     """
     # Machine starts at the origin; include it so frame 1 of the animation is at home.
-    current_pos = np.array([0.0, 0.0, 0.0, 0.0])  # [x, y, z, feedrate]
+    current_pos = np.array([0.0, 0.0, 0.0, 0.0, 0.0])  # [x, y, z, u, toolchanging]
     path = [current_pos.copy()]
     machine = GCodeMachine()
 
@@ -41,6 +41,7 @@ def build_path(lines: list[str], distance_per_step: float) -> list[np.ndarray]:
         # Returns None for blank lines and pure comment lines.
         command = parse_command(line)
         if command is None:
+            print(command)
             continue
 
         # Commands without a registered handler (e.g. M-codes, T-codes) are skipped.
@@ -52,7 +53,7 @@ def build_path(lines: list[str], distance_per_step: float) -> list[np.ndarray]:
         # to the segment target (inclusive), spaced at most distance_per_step apart.
         # Non-motion handlers (G90, G91, ...) return [] and only update machine state.
         steps = handler(line, current_pos, distance_per_step)
-        if steps:
+        if steps :
             path.extend(steps)
             # Advance the position tracker to the end of this segment.
             current_pos = steps[-1].copy()
@@ -78,7 +79,7 @@ def main():
         for i, pos in enumerate(path):
             if i != 0:
                 f2.write('\n')
-            f2.write(f"{pos[0]},{pos[1]},{pos[2]}")
+            f2.write(f"{pos[0]},{pos[1]},{pos[2]},{pos[3]},{pos[4]}")
 
 
 if __name__ == "__main__":
