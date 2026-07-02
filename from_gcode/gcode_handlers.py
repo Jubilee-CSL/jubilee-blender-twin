@@ -48,7 +48,7 @@ def _interpolate_linear(
     so each step is at most distance_per_step long.  Zero-length moves return
     [end] unchanged.
     """
-    total_dist = dis(start[0:3], end[0:3])
+    total_dist = dis(start[0:4], end[0:4])
     if total_dist == 0.0 or distance_per_step <= 0.0:
         return [end.copy()]
     n_steps = max(1, ceil(total_dist / distance_per_step))
@@ -80,6 +80,7 @@ class GCodeMachine:
     def __init__(self) -> None:
         self._absolute_mode: bool = True  # G90 is the Duet power-on default
         self._registry: dict[str, callable] = self._build_registry()
+        self.storage: np.ndarray = np.zeros((3,5))
 
     def _build_registry(self) -> dict[str, callable]:
         return {
@@ -87,6 +88,8 @@ class GCodeMachine:
             'G1':  self.handle_G1,
             'G90': self.handle_G90,
             'G91': self.handle_G91,
+            'G60': self.handle_G60,
+            'G53': self.handle_G53,
         }
 
     def get_handler(self, command: str) -> callable | None:
@@ -97,7 +100,19 @@ class GCodeMachine:
 
     def _resolve_target(self, line: str, current_pos: np.ndarray) -> np.ndarray:
         """Resolve the target position for a move, respecting the current positioning mode."""
-        return find_coord(line, current_pos, relative=not self._absolute_mode)
+        
+        print(f"DEBUG line={line.strip()!r}")
+        print(f"DEBUG  current_pos={current_pos}")
+        print(f"DEBUG  storage (before)=\n{self.storage}")
+        target, new_storage = find_coord(
+            line, current_pos, self.storage, relative=not self._absolute_mode
+        )
+       
+        print(f"DEBUG  target={target}")
+        print(f"DEBUG  storage (after)=\n{new_storage}")
+        print("-" * 60)
+
+        return find_coord(line, current_pos, self.storage, relative=not self._absolute_mode)
 
     # --- motion handlers ---
 
@@ -108,7 +123,7 @@ class GCodeMachine:
         ,distance_per_step: float
     ) -> list[np.ndarray]:
         """Rapid positioning move - straight-line interpolation."""
-        target = self._resolve_target(line, current_pos)
+        target,_ = self._resolve_target(line, current_pos)
         return _interpolate_linear(current_pos, target, distance_per_step)
 
     def handle_G1(
@@ -118,8 +133,12 @@ class GCodeMachine:
         ,distance_per_step: float
     ) -> list[np.ndarray]:
         """Controlled linear move - straight-line interpolation."""
-        target = self._resolve_target(line, current_pos)
-        return _interpolate_linear(current_pos, target, distance_per_step)
+        print(line)
+        target,self.storage = self._resolve_target(line, current_pos)
+        if target[-1] != 1.0:
+            return _interpolate_linear(current_pos, target, distance_per_step)
+        else:
+            return [target]
 
     # --- positioning mode handlers ---
 
@@ -142,3 +161,32 @@ class GCodeMachine:
         """Switch to relative positioning mode."""
         self._absolute_mode = False
         return []
+    
+    def handle_G60(
+        self
+        ,line: str
+        ,current_pos: np.ndarray
+        ,distance_per_step: float
+    ) -> list[np.ndarray]:
+        target,self.storage = self._resolve_target(line, current_pos)
+        return _interpolate_linear(current_pos, target, distance_per_step)
+
+    def handle_G53(
+        self
+        ,line: str
+        ,current_pos: np.ndarray
+        ,distance_per_step: float
+    ) -> list[np.ndarray]:
+        line.split()
+        nl = str(line[3:]).strip()
+        command = parse_command(nl)
+        handler =  self.get_handler(command)
+        if handler is None:
+            return []
+        return handler(nl,current_pos,distance_per_step)
+        
+
+    
+
+        
+        
