@@ -5,6 +5,20 @@ Original author: Tanmay Chhatbar
 """
 from math import sqrt
 import numpy as np
+import bpy
+import csv
+
+tool_data_path = bpy.path.abspath("//from_gcode/tool_data.csv")
+
+def identify_tool(x,y):
+    with open(tool_data_path, newline='') as csvfile:
+        reader = csv.reader(csvfile)
+        next(reader)
+        for row in reader:
+            if float(row[2]) == x and float(row[3]) == y:
+                return row[0], row[1] 
+        return None, None
+
 
 
 def _extract_numeric_after(token: str) -> float | None:
@@ -24,7 +38,7 @@ def _extract_numeric_after(token: str) -> float | None:
         return None
 
 
-def find_coord(line: str, curcoord: np.ndarray, storage: np.ndarray, relative: bool = False) -> np.ndarray:
+def find_coord(line: str, curcoord: np.ndarray, storage: np.ndarray = [], relative: bool = False) -> np.ndarray:
     """Extract target coordinates from a single gcode line.
 
     Scans for X, Y, Z, and F tokens and updates the corresponding element of
@@ -84,7 +98,7 @@ def find_coord(line: str, curcoord: np.ndarray, storage: np.ndarray, relative: b
                         nl[-1] = 1.0  
                         nl[0:i] = curcoord[0:i]
                     elif  val == 1 and nl[3] == -364.0:
-                        nl[-1] = 1.0
+                        nl[-1] = -1.0
                         nl[0:i] = curcoord[0:i]
                 else:
                     nl[i] = val

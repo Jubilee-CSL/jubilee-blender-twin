@@ -1,0 +1,5 @@
+Tool_ID,Name,Park_X,Park_Y,Park_Z,Offset_X,Offset_Y,Offset_Z
+0,Camera_top,290.5,338.5,0.0,0.0,41.7,-180.0
+1,Light_sensor,210.0,338.0,0.0,0.0,0.0,0.0
+2,Outil2,0.0,0.0,0.0,0.0,0.0,0.0
+3,Outil3,0.0,0.0,0.0,0.0,0.0,0.0

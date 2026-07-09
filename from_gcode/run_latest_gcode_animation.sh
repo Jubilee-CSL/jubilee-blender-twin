@@ -1,8 +1,9 @@
 #!/bin/bash
 # Workflow script: Copy latest G-code from science-jubilee to jubilee-blender-twin and run animation
+cd "$(dirname "$0")"
 
 # Set paths
-SRC_GCODE="../../science_jubilee/gcode_logs/test_corners_path.gcode"
+SRC_GCODE="../../science_jubilee/gcode_logs/test_tool_change_from_no_active_tool_expands_tpre_and_tpost.gcode"
 DST_GCODE="path.gcode"
 ANIM_SCRIPT="path_follower.py"
 
@@ -16,7 +17,7 @@ python "$ANIM_SCRIPT" "$DST_GCODE"
 BLEND_FILE="../jubilee.blend"
 BLENDER_SCRIPT="animate_path.py"
 # Adjust the path to Blender as needed
-BLENDER_EXE="/Applications/Blender.app/Contents/MacOS/Blender"
+BLENDER_EXE="C:\Program Files\Blender Foundation\Blender 5.0\blender.exe"
 
 "$BLENDER_EXE" "$BLEND_FILE" --python "$BLENDER_SCRIPT"
 
