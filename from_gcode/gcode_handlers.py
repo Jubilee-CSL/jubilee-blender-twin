@@ -135,7 +135,7 @@ class GCodeMachine:
         """Controlled linear move - straight-line interpolation."""
         print(line)
         target,self.storage = self._resolve_target(line, current_pos)
-        if target[4] != 1.0 or target[4] != -1.0:
+        if target[-1] != 1.0 or target[-1] != -1.0:
             return _interpolate_linear(current_pos, target, distance_per_step)
         else:
             return [target]
