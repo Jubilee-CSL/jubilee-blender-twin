@@ -3,8 +3,8 @@ REM Workflow script: Copy latest G-code from science-jubilee to jubilee-blender-
 cd /d "%~dp0"
 
 REM Set paths
-set "SRC_GCODE=..\..\science_jubilee_twin_link\gcode_logs\test_tool_change_from_no_active_tool_expands_tpre_and_tpost.gcode"
-set "SRC_CONFIG=..\..\science_jubilee_twin_link\firmware\sys"
+set "SRC_GCODE=..\..\science_jubilee\gcode_logs\test_tool_change_from_no_active_tool_expands_tpre_and_tpost.gcode"
+set "SRC_CONFIG=..\..\science_jubilee\firmware\sys"
 set "DST_CONFIG=..\config"
 set "DST_GCODE=path.gcode"
 set "ANIM_SCRIPT=path_follower.py"
