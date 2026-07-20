@@ -11,6 +11,9 @@ Outputs pathout.csv in the current working directory, with one x,y,z row per ste
 """
 import sys
 import os
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 import numpy as np
 from gcode_handlers import parse_command, GCodeMachine
 
@@ -18,7 +21,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Maximum mm between consecutive output positions. Larger values produce fewer
 # rows (coarser animation); smaller values produce more rows (smoother animation).
-DEFAULT_DISTANCE_PER_STEP = 1.0
+DEFAULT_DISTANCE_PER_STEP = 50.0
 
 
 def build_path(lines: list[str], distance_per_step: float) -> list[np.ndarray]:
@@ -31,7 +34,7 @@ def build_path(lines: list[str], distance_per_step: float) -> list[np.ndarray]:
     straight segments; smaller values produce denser paths.
     """
     # Machine starts at the origin; include it so frame 1 of the animation is at home.
-    current_pos = np.array([0.0, 0.0, 0.0, 0.0, 0.0])  # [x, y, z, u, toolchanging]
+    current_pos = np.array([0.0, 0.0, 0.0, 0.0, 0.0,-1.0])  # [x, y, z, u, toolchanging]
     path = [current_pos.copy()]
     machine = GCodeMachine()
 
@@ -41,7 +44,6 @@ def build_path(lines: list[str], distance_per_step: float) -> list[np.ndarray]:
         # Returns None for blank lines and pure comment lines.
         command = parse_command(line)
         if command is None:
-            print(command)
             continue
 
         # Commands without a registered handler (e.g. M-codes, T-codes) are skipped.
@@ -79,7 +81,7 @@ def main():
         for i, pos in enumerate(path):
             if i != 0:
                 f2.write('\n')
-            f2.write(f"{pos[0]},{pos[1]},{pos[2]},{pos[3]},{pos[4]}")
+            f2.write(f"{pos[0]},{pos[1]},{pos[2]},{pos[3]},{pos[4]},{pos[5]}")
 
 
 if __name__ == "__main__":

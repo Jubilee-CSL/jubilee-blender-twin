@@ -52,8 +52,14 @@ def _interpolate_linear(
     if total_dist == 0.0 or distance_per_step <= 0.0:
         return [end.copy()]
     n_steps = max(1, ceil(total_dist / distance_per_step))
+    
+    tail = end[4:]
+    
     return [
-        start + (end - start) * (i / n_steps)
+        np.concatenate([
+            start[0:4] + (end[0:4] - start[0:4]) * (i / n_steps),
+            tail
+        ])
         for i in range(1, n_steps + 1)
     ]
 
@@ -80,7 +86,7 @@ class GCodeMachine:
     def __init__(self) -> None:
         self._absolute_mode: bool = True  # G90 is the Duet power-on default
         self._registry: dict[str, callable] = self._build_registry()
-        self.storage: np.ndarray = np.zeros((3,5))
+        self.storage: np.ndarray = np.zeros((3,6))
 
     def _build_registry(self) -> dict[str, callable]:
         return {
@@ -101,18 +107,18 @@ class GCodeMachine:
     def _resolve_target(self, line: str, current_pos: np.ndarray) -> np.ndarray:
         """Resolve the target position for a move, respecting the current positioning mode."""
         
-        print(f"DEBUG line={line.strip()!r}")
-        print(f"DEBUG  current_pos={current_pos}")
-        print(f"DEBUG  storage (before)=\n{self.storage}")
+        #print(f"DEBUG line={line.strip()!r}")
+        #print(f"DEBUG  current_pos={current_pos}")
+        #print(f"DEBUG  storage (before)=\n{self.storage}")
         target, new_storage = find_coord(
             line, current_pos, self.storage, relative=not self._absolute_mode
         )
        
-        print(f"DEBUG  target={target}")
-        print(f"DEBUG  storage (after)=\n{new_storage}")
-        print("-" * 60)
+        #print(f"DEBUG  target={target}")
+        #print(f"DEBUG  storage (after)=\n{new_storage}")
+        #print("-" * 60)
 
-        return find_coord(line, current_pos, self.storage, relative=not self._absolute_mode)
+        return target,new_storage
 
     # --- motion handlers ---
 
@@ -133,9 +139,8 @@ class GCodeMachine:
         ,distance_per_step: float
     ) -> list[np.ndarray]:
         """Controlled linear move - straight-line interpolation."""
-        print(line)
         target,self.storage = self._resolve_target(line, current_pos)
-        if target[-1] != 1.0 or target[-1] != -1.0:
+        if target[4] == 0.0:
             return _interpolate_linear(current_pos, target, distance_per_step)
         else:
             return [target]

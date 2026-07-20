@@ -44,7 +44,7 @@ def extract_parks(sys_dir):
         
         if os.path.exists(fn):
             with open(fn, 'r') as f:
-                nl = np.array([0.0, 0.0, 0.0, 0.0, 0.0])        
+                nl = np.array([0.0, 0.0, 0.0, 0.0, 0.0,-1.0])        
                 for line in f:
                     split_line = line.split()
                     if split_line and split_line[0] == "G53":
@@ -70,7 +70,7 @@ def extract_offset(sys_dir):
                         if p.startswith("P"):
                             try:
                                 idx = int(p[1:])
-                                nl, _ = find_coord(line, np.array([0.0, 0.0, 0.0, 0.0, 0.0]))
+                                nl, _ = find_coord(line, np.array([0.0, 0.0, 0.0, 0.0, 0.0,-1.0]))
                                 offsets[idx] = nl[:3]
                             except ValueError:
                                 pass
@@ -78,7 +78,7 @@ def extract_offset(sys_dir):
 
 if __name__ == "__main__":
 
-    target_sys_dir = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "science_jubilee_twin_link", "firmware","sys"))
+    target_sys_dir = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "science_jubilee_twin_link", "firmware","sys")) #!!!!! A CHANGER
     
     print(f"Targeting config directory: {target_sys_dir}")
 
