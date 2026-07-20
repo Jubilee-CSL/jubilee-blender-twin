@@ -37,14 +37,14 @@ def apply_offset(x,y,z,tool_id):
     
     return x,y,z
 
-def identify_tool(x,y):
+def identify_tool(tool_id):
     with open(tool_data_path, newline='') as csvfile:
         reader = csv.reader(csvfile)
         next(reader)
         for row in reader:
-            if float(row[2]) == x and float(row[3]) == y:
-                return row[0], row[1] 
-        return None, None
+            if float(row[0]) == tool_id:
+                return row[1] 
+        return None
 
 # Fetch gantry collection for moving tool later
 gantry = bpy.data.collections["gantry"]
@@ -101,17 +101,15 @@ print(f"Axis mins: X={x_min}, Y={y_min}, Z={z_max}")
 # Pass 1: insert all keyframes first
 tool_flag = False
 
-for frame, (x, y, z, u, toolchange) in enumerate(points, start=1):
+for frame, (x, y, z, u, toolchange, tool_id) in enumerate(points, start=1):
     if toolchange > 0.0:
         tool_flag = True
-        tool_id,_ = identify_tool(x,y)
 
     elif toolchange < 0.0:
         tool_flag = False
-        tool_id = None
     
-    if tool_flag and tool_id is not None:
-        x,y,z = apply_offset(x,y,z,tool_id)
+    if float(tool_id) != -1.0 and tool_flag is not None:
+        x,y,z = apply_offset(x,y,z,float(tool_id))
 
     x_axis.location.x = (x_max - x/1000)
     x_axis.keyframe_insert(data_path="location", frame=frame)
@@ -127,9 +125,9 @@ tool_flag = False
 tool = None
 tool_name = None
 
-for frame, (x, y, z, u, toolchange) in enumerate(points, start=1):
+for frame, (x, y, z, u, toolchange, tool_id) in enumerate(points, start=1):
     if toolchange > 0:
-        tool_id, tool_name = identify_tool(x, y)
+        tool_name = identify_tool(float(tool_id))
         tool = bpy.data.collections.get(tool_name)
         if tool is None:
             print(f"Collection {tool_name} not found")
