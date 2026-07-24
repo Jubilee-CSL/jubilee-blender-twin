@@ -15,6 +15,9 @@ y_parts = bpy.data.collections["Y-parts"]
 csv_path = bpy.path.abspath("//from_gcode/pathout.csv")
 tool_data_path = bpy.path.abspath("//from_gcode/tool_data.csv")
 
+STATIC_DIRECTION = np.array([0.0, 0.0, -0.01])  
+STATIC_DISTANCE  = 0.01
+
 class GantryHead(int,Enum):
     TOOL0 = 0
     TOOL1 = 1
@@ -25,7 +28,7 @@ class GantryHead(int,Enum):
 @dataclass
 class CollisionEvent:
     frame: int
-    collided_object: object
+    collided_object: str
     location: Vector
 
 @dataclass
@@ -33,9 +36,7 @@ class AnimationData:
     tool_agenda:  list[int]    = field(default_factory=list)
     hull_origins: np.ndarray   = field(default_factory=lambda: np.array([]))
     directions:   np.ndarray   = field(default_factory=lambda: np.array([]))
-    frame_num:    int          = 0
-    
-    
+    frame_num:    int          = 0   
 
 _tool_hulls_dict={
     GantryHead.NOTOOL : None,
@@ -61,33 +62,61 @@ _vision_dict={
     GantryHead.TOOL3 : [],
 }
 
+_show_hulls  : bool  = True
+_show_rays : bool = True
+
 _collision_list : list[CollisionEvent] = []
 
 _tool_changing_dict: dict[int,(int,str)] = {1: (-1, "Gantry")}
 
+def set_show_rays(value: bool):
+    global _show_rays
+    _show_rays = value
+    coll = bpy.data.collections.get("Ray Tracing Directions")
+    if coll:
+        for obj in coll.objects:
+            obj.hide_set(not value)
+            obj.hide_render = not value
+
+def set_show_hulls(value: bool):
+    global _show_hulls
+    _show_hulls = value
+    coll = bpy.data.collections.get("Tool Hulls")
+    if coll:
+        for obj in coll.objects:
+            obj.hide_set(not value)
+            obj.hide_render = not value
+
 def frame_update(scene):
-    global _tool_hulls_dict
+    global _tool_hulls_dict, _show_hulls, _show_rays
 
     with open(csv_path, newline='') as csvfile:
         reader = csv.reader(csvfile)
         tools = []
         for row in reader:
             tools.append(row[5])
-    
-    for frame in range(scene.frame_start,scene.frame_end):
-        frame_name = f"frame_{frame}_directions"
-        obj = bpy.data.objects.get(frame_name)
-        if obj is not None:
-            obj.hide_set(frame != scene.frame_current)
-            obj.hide_render = (frame != scene.frame_current)
+
+    if _show_rays:
+        for frame in range(scene.frame_start,scene.frame_end):
+            frame_name = f"frame_{frame}_directions"
+            obj = bpy.data.objects.get(frame_name)
+            if obj is not None:
+                obj.hide_set(frame != scene.frame_current)
+                obj.hide_render = (frame != scene.frame_current)
+    else:
+        for frame in range(scene.frame_start,scene.frame_end):
+            frame_name = f"frame_{frame}_directions"
+            obj = bpy.data.objects.get(frame_name)
+            if obj is not None:
+                obj.hide_set(True)
+                obj.hide_render = (True)
             
-    
-    for hull_idx,hull in _tool_hulls_dict.items():
-        if hull is not None:
-            hull.hide_set(int(float(tools[scene.frame_current-1])) != hull_idx )
-            hull.hide_render = (int(float(tools[scene.frame_current-1])) != hull_idx)
 
-
+    if _show_hulls:
+        for hull_idx,hull in _tool_hulls_dict.items():
+            if hull is not None:
+                hull.hide_set(int(float(tools[scene.frame_current-1])) != hull_idx )
+                hull.hide_render = (int(float(tools[scene.frame_current-1])) != hull_idx)
 
 
 def get_or_create_collection(name):
@@ -111,6 +140,32 @@ def remove_collection(name):
     for obj in col.objects[:]:
         bpy.data.objects.remove(obj, do_unlink=True)
     bpy.data.collections.remove(col)
+
+def reset_dicts():
+
+    global _tool_changing_dict
+    global _target_dict
+    global _vision_dict
+    global _tool_hulls_dict 
+
+    for key in _tool_hulls_dict.keys():
+        _tool_hulls_dict[key] = None
+
+    _target_dict = { 
+        GantryHead.NOTOOL : [gantry, xy_carriage],
+        GantryHead.TOOL0 : [],
+        GantryHead.TOOL1 : [],
+        GantryHead.TOOL2 : [],
+        GantryHead.TOOL3 : [],
+    }
+    _vision_dict = {
+        GantryHead.NOTOOL : [gantry, xy_carriage, y_parts],
+        GantryHead.TOOL0 : [],
+        GantryHead.TOOL1 : [],
+        GantryHead.TOOL2 : [],
+        GantryHead.TOOL3 : [],
+    }
+    
 
 def _extract_tool_changing(animation:AnimationData):
     global _tool_changing_dict
@@ -147,7 +202,7 @@ def _extract_tool_changing(animation:AnimationData):
                             print(f"TOOL:{row_j}")
                             tool_name = row_j[1] 
         
-        _tool_changing_dict[frame] = (tool_id,tool_name)
+                _tool_changing_dict[frame] = (tool_id,tool_name)
         animation.tool_agenda = tool_agenda
     print(f"FINAL DICT:{_tool_changing_dict}")
     print("-"*60)
@@ -219,9 +274,12 @@ def _gen_tool_hulls(scene,depsgraph):
     global _tool_changing_dict
     global _target_dict
     global _vision_dict
+    global _tool_hulls_dict 
 
     remove_collection("Tool Hulls")
 
+    reset_dicts()
+    
     print("-"*60)
     print("TOOL HULLS DEBUG")
     print("-"*60)
@@ -314,7 +372,7 @@ def _trace_ray_traj(frame_num,origins,directions,frame):
     colors = [c for c in np.linspace((0, 0, 1), (1, 0, 0), num=frame_num, dtype=float)]
 
     arrows = bplt.Arrows(origins,
-                np.tile(directions[frame-1], (len(origins), 1)),
+                np.tile(directions[frame-2], (len(origins), 1)),
                 color=colors[frame-1],
                 name=f"frame_{frame}_directions",
                 head_length=0.001,
@@ -325,36 +383,54 @@ def _trace_ray_traj(frame_num,origins,directions,frame):
     if arrows is not None:
         blender_obj = bpy.data.objects.get(f"frame_{frame}_directions")
         if blender_obj is not None:
+            blender_obj.hide_set(True)
             if blender_obj.name in bpy.context.scene.collection.objects:
                 bpy.context.scene.collection.objects.unlink(blender_obj)
             coll.objects.link(blender_obj)
-            blender_obj.hide_set(True)
-        
             
-    
+            
 def _ray_tracing(scene,depsgraph,frame,vertices,directions):
+    global _collision_list 
 
     distance = np.linalg.norm(directions)
     if distance < 1e-6:
-        return 
-    direction_normalized = Vector(directions / distance)
+        direction_normalized = Vector(STATIC_DIRECTION)
+        distance = STATIC_DISTANCE
+    else:
+        direction_normalized = Vector(directions / distance)
 
     obj_collided = []
 
+    arrows = bpy.data.objects.get(f"frame_{frame}_directions")
+    if arrows is not None:
+        arrows.hide_set(True)
+
     for coord in vertices:
-            hit, loc, normal, index, object, mat = scene.ray_cast(
-                depsgraph = depsgraph, 
-                origin = Vector(coord),
-                direction = direction_normalized,
-                distance = distance
-                )
-            if hit and object.name not in obj_collided:
-                obj_collided.append(object.name)
-                print(f"Collision between gantry and {object.name} during frame {frame}")
+        hit, loc, normal, index, object, mat = scene.ray_cast(
+            depsgraph = depsgraph, 
+            origin = Vector(coord),
+            direction = direction_normalized,
+            distance = distance
+            )
+        if hit and object.name not in obj_collided:
+            print(f"HIT LOCATION:{loc}")
+            print(f"DIRECTION:{direction_normalized}")
+            collision = CollisionEvent(frame,object.name,loc)
+            _collision_list.append(collision)
+            obj_collided.append(object.name)
+
+            print(f"HIT LOCATION:{loc}")
+            print(f"DIRECTION:{direction_normalized}")
+            print(f"Collision between gantry and {object.name} during frame {frame}")
 
 def ray_tracing_CD():
 
     global _target_dict,_vision_dict,_tool_changing_dict,_hull_verts_dict
+
+    set_show_rays(False)
+
+    _collision_list.clear()
+
     anim = AnimationData()
 
     bpy.context.view_layer.update()
@@ -369,7 +445,7 @@ def ray_tracing_CD():
 
     anim.hull_origins, anim.directions = _compute_directions_CH(scene,anim.frame_num)
 
-    for frame in range(scene.frame_start,scene.frame_end):
+    for frame in range(scene.frame_start+1,scene.frame_end):
         scene.frame_set(frame)
         bpy.context.evaluated_depsgraph_get()
 
@@ -388,9 +464,17 @@ def ray_tracing_CD():
         _ray_tracing(scene,depsgraph,frame,vertices,anim.directions[frame])
         _unhide_vision_collection(_vision_dict[anim.tool_agenda[frame-1]])
 
+
         _trace_ray_traj(anim.frame_num,vertices,anim.directions,frame)
 
-        bpy.app.handlers.frame_change_pre.append(frame_update)
+       
+    bpy.app.handlers.frame_change_pre[:] = [
+        h for h in bpy.app.handlers.frame_change_pre
+        if h.__name__ != "frame_update"
+    ]
+    bpy.app.handlers.frame_change_pre.append(frame_update)
+
+    scene.frame_set(scene.frame_start + 1)
 
 
 

@@ -78,11 +78,13 @@ def extract_offset(sys_dir):
 
 if __name__ == "__main__":
 
-    target_sys_dir = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "science_jubilee_twin_link", "firmware","sys")) #!!!!! A CHANGER
-    
-    print(f"Targeting config directory: {target_sys_dir}")
+    if len(sys.argv) > 1:
+        target_sys_dir = os.path.abspath(sys.argv[1])
+    else:
+        target_sys_dir = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "config"))
 
-    # Extract Data
+    print(f"Targeting config directory: {target_sys_dir}")
+    
     tool_names = extract_names(target_sys_dir)
     tool_parks = extract_parks(target_sys_dir)
     tool_offsets = extract_offset(target_sys_dir)
