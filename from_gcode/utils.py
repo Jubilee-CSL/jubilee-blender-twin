@@ -5,7 +5,21 @@ Original author: Tanmay Chhatbar
 """
 from math import sqrt
 import numpy as np
+import csv 
+import os
+import sys
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+tool_data_path = os.path.join(SCRIPT_DIR, "tool_data.csv")
+
+def _identify_tool(x,y):
+    with open(tool_data_path, newline='') as csvfile:
+        reader = csv.reader(csvfile)
+        next(reader)
+        for row in reader:
+            if float(row[2]) == x and float(row[3]) == y:
+                return float(row[0])
+        return None
 
 
 def _extract_numeric_after(token: str) -> float | None:
@@ -40,17 +54,19 @@ def find_coord(line: str, curcoord: np.ndarray, storage: np.ndarray = [], relati
     Returns a new array; curcoord is not modified.
     """
     nl = curcoord.copy()
-    nl[-1] = 0.0
+    nl[4] = 0.0
 
-    restored_val=np.array([0.0,0.0,0.0,0.0,0.0])
+    restored_val=np.array([0.0,0.0,0.0,0.0,0.0,-1.0])
 
     split_line = line.split(";", 1)[0]
 
-    checks = ["X", "Y", "Z", "U", "H"]
+    checks = ["X", "Y", "Z", "U","H"]
+
+    val = None
 
     for i, axis in enumerate(checks):
         
-        if "S" in split_line:
+        if "S" in split_line: #save coord
 
             after = line.split("S", 1)[1]
             val = _extract_numeric_after(after)
@@ -59,7 +75,7 @@ def find_coord(line: str, curcoord: np.ndarray, storage: np.ndarray = [], relati
                 storage[int(val),i] = curcoord[i]
                 nl[i:4] = curcoord[i:4]
 
-        if "R" in split_line:
+        if "R" in split_line:  #load saved coord
 
             after = line.split("R", 1)[1]
             val = _extract_numeric_after(after)
@@ -69,8 +85,7 @@ def find_coord(line: str, curcoord: np.ndarray, storage: np.ndarray = [], relati
                 recurr_line = axis + after.split(axis, 1)[1]
                 offset, storage = find_coord(recurr_line, restored_val, storage, relative=True)
                 nl[i:4] = offset[i:4]
-            else:
-                nl[i:4] = curcoord[i:4]
+
             continue
 
 
@@ -78,17 +93,24 @@ def find_coord(line: str, curcoord: np.ndarray, storage: np.ndarray = [], relati
             after = line.split(axis, 1)[1]
             val = _extract_numeric_after(after)
             if val is not None:
-                if relative and axis != "T":
+
+                print(f"[Debug find_coord] Found axis {axis} with value {val}")
+
+                if axis == "H":
+                    print(f"[H branch] nl[3]={nl[3]}, curcoord[3]={curcoord[3]}, relative={relative}")
+                    print(f"[H branch] nl[5] before={nl[5]}")
+                    if nl[3] == 90.0:
+                        nl[4] = 1.0
+                        result = _identify_tool(curcoord[0], curcoord[1])
+                        print(f"[H branch] _identify_tool returned: {result}")
+                        nl[5] = result
+                    elif nl[3] == -364.0:
+                        nl[4] = -1.0
+                        nl[5] = -1.0
+
+ 
+                elif relative and axis != "T":
                     nl[i] = curcoord[i] + val
-                elif axis == "H":
-                    if val == 2 and nl[3] == 90.0:    
-                        nl[-1] = 1.0 
-
-                        nl[0:i] = curcoord[0:i]
-
-                    elif  val == 1 and nl[3] == -364.0:
-                        nl[-1] = -1.0
-                        nl[0:i] = curcoord[0:i]
 
                 else:
                     nl[i] = val
