@@ -8,6 +8,9 @@ version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = ["numpy"]
 
+[project.scripts]
+jubilee-twin = "jubilee_twin.cli:main"
+
 [project.entry-points."jubilee.paths"]
 twin_dir = "jubilee_twin.paths:twin_dir"
 

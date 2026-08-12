@@ -6,14 +6,12 @@ from jubilee_twin.paths import twin_dir
 
 
 def _discover_jubilee_root() -> Path | None:
-    """Find the science_jubilee repo root via entry point, then by import fallback."""
     from importlib.metadata import entry_points
     eps = [ep for ep in entry_points(group="jubilee.paths") if ep.name == "jubilee_dir"]
     if eps:
         return Path(eps[0].load()())
     try:
         import science_jubilee
-        # src/science_jubilee/__init__.py → parents[2] is the repo root
         return Path(science_jubilee.__file__).parents[2]
     except ImportError:
         return None
@@ -25,7 +23,6 @@ class TwinDriver:
 
     @classmethod
     def from_entry_point(cls, blender_exe: str = None) -> "TwinDriver":
-        """Instantiate by verifying the twin_dir entry point resolves correctly."""
         from importlib.metadata import entry_points
         eps = [ep for ep in entry_points(group="jubilee.paths") if ep.name == "twin_dir"]
         if not eps:
@@ -37,39 +34,64 @@ class TwinDriver:
             raise RuntimeError(f"twin_dir() returned a path that does not exist: {td}")
         return cls(blender_exe=blender_exe)
 
-    def animate_from_gcode(self, gcode_file: Path, science_jubilee_root: Path = None) -> int:
+    def animate_from_gcode(
+        self,
+        gcode_file: Path,
+        distance_per_step: float = 50.0,
+        interactive: bool = False,
+    ) -> int:
         """Run the full gcode→animation pipeline.
 
-        Level 1: delegates to run_latest_gcode_animation.bat.
-        Level 2: will call path_follower and Blender steps directly.
+        Steps:
+          1. Extract tool config → pipeline_data/tool_data.csv
+          2. Parse gcode        → pipeline_data/pathout.csv
+          3. Launch Blender with animate_path.py
+
+        interactive=False: Blender runs headless (--background), no window.
+        interactive=True:  Blender opens in GUI mode so you can inspect the result.
         """
+        from jubilee_twin.pipeline import tool_id, path_follower
+
         td = twin_dir()
-        bat = td / "from_gcode" / "run_latest_gcode_animation.bat"
+        pipeline_data_dir = str(td / "pipeline_data")
 
-        if science_jubilee_root is None:
-            science_jubilee_root = _discover_jubilee_root()
-        if science_jubilee_root is None:
-            raise RuntimeError(
-                "science_jubilee root not found. "
-                "Install science-jubilee or register jubilee.paths/jubilee_dir."
-            )
+        print("Step 1/3: extracting tool data...")
+        tool_id.run(output_dir=pipeline_data_dir)
 
-        gcode_file = Path(gcode_file)
-        cmd = [str(bat), str(science_jubilee_root), str(td), self.blender_exe, gcode_file.name]
-        return subprocess.run(cmd, shell=True).returncode
+        print("Step 2/3: parsing gcode...")
+        path_follower.run(
+            gcode_file=str(gcode_file),
+            distance_per_step=distance_per_step,
+            output_dir=pipeline_data_dir,
+        )
+
+        print("Step 3/3: launching Blender...")
+        blend = td / "blender_models" / "jubilee_belt.blend"
+        script = td / "blender_addon" / "jubilee_digital_twin" / "animate_path.py"
+        cmd = [self.blender_exe, str(blend)]
+        if not interactive:
+            cmd.append("--background")
+        cmd += ["--python", str(script)]
+        return subprocess.run(cmd).returncode
 
     def open_interactive(self) -> None:
-        """Open Blender with jubilee_belt.blend."""
-        subprocess.Popen([self.blender_exe, str(twin_dir() / "jubilee_belt.blend")])
+        """Open jubilee_belt.blend in the Blender GUI without running any script."""
+        subprocess.Popen([self.blender_exe, str(twin_dir() / "blender_models" / "jubilee_belt.blend")])
 
-    def run_raytracing(self) -> None:
-        """Run ray-tracing collision detection in-process. Requires bpy."""
-        import sys
-        sys.path.insert(0, str(twin_dir()))
-        from ray_tracing import ray_tracing_cd
-        ray_tracing_cd()
+    def run_raytracing(self, interactive: bool = False) -> int:
+        """Animate the scene then run ray-tracing, in a single Blender session."""
+        td = twin_dir()
+        blend = td / "blender_models" / "jubilee_belt.blend"
+        animate_script = td / "blender_addon" / "jubilee_digital_twin" / "animate_path.py"
+        raytrace_script = td / "blender_addon" / "jubilee_digital_twin" / "ray_tracing.py"
+        cmd = [self.blender_exe, str(blend)]
+        if not interactive:
+            cmd.append("--background")
+        # animate first so keyframes exist when ray_tracing evaluates them
+        cmd += ["--python", str(animate_script), "--python", str(raytrace_script)]
+        return subprocess.run(cmd).returncode
 
 
-def run_twin(gcode_file, config_dir=None) -> int:
+def run_twin(gcode_file, **kwargs) -> int:
     """Entry point callable for science_jubilee.digital_twin."""
-    return TwinDriver().animate_from_gcode(Path(gcode_file))
+    return TwinDriver().animate_from_gcode(Path(gcode_file), **kwargs)

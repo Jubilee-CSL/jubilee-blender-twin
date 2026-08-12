@@ -1,8 +1,5 @@
 import bpy
-import os
 import sys
-import glob
-
 from bpy.props import StringProperty, IntProperty, CollectionProperty, BoolProperty
 from bpy.types import PropertyGroup, UIList, Operator, Panel
 
@@ -15,20 +12,6 @@ bl_info = {
     "description": "Jubilee digital twin for simulation and collision detection",
     "category": "3D View",
 }
-
-def find_rt_module():
-    addon_dir = os.path.dirname(os.path.abspath(__file__))
-    search_roots = [
-        addon_dir,
-        os.path.abspath(os.path.join(addon_dir, "..")),
-        os.path.abspath(os.path.join(addon_dir, "..", "..")),
-        r"C:/Users/INVITE/Documents/STAGE_JUBILEE_IB_26/jubilee-blender-twin",
-    ]
-    for root in search_roots:
-        matches = glob.glob(os.path.join(root, "**", "ray_tracing.py"), recursive=True)
-        if matches:
-            return os.path.dirname(matches[0])
-    return None
 
 
 # ── Property group for one collision event ────────────────────────────────
@@ -56,6 +39,19 @@ class COLLISION_OT_goto_frame(Operator):
         return {'FINISHED'}
 
 
+# ── Animate operator ──────────────────────────────────────────────────────
+class ANIM_OT_animate(Operator):
+    bl_idname = "anim.animate_path"
+    bl_label = "Animate from CSV"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        # deferred import so bpy.data.filepath is set before animate_path runs
+        from . import animate_path as ap
+        ap.run_animation()
+        return {'FINISHED'}
+
+
 # ── Run ray tracing operator ──────────────────────────────────────────────
 class ANIM_OT_raytracing(Operator):
     bl_idname = "anim.raytracing_sim"
@@ -63,13 +59,11 @@ class ANIM_OT_raytracing(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        import ray_tracing as rt
+        from . import ray_tracing as rt
 
         rt._collision_list.clear()
-
         rt.ray_tracing_CD()
 
-        # Populate the collision list from rt._collision_list
         context.scene.collision_list.clear()
         for event in rt._collision_list:
             item = context.scene.collision_list.add()
@@ -87,7 +81,7 @@ class ANIM_OT_toggle_rays(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        import ray_tracing as rt
+        from . import ray_tracing as rt
         rt.set_show_rays(not rt._show_rays)
         context.scene.show_rays = rt._show_rays
         return {'FINISHED'}
@@ -100,13 +94,13 @@ class ANIM_OT_toggle_hulls(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        import ray_tracing as rt
+        from . import ray_tracing as rt
         rt.set_show_hulls(not rt._show_hulls)
         context.scene.show_hulls = rt._show_hulls
         return {'FINISHED'}
 
 
-# ── Main panel ────────────────────────────────────────────────────────────
+# ── Animation subpanel ────────────────────────────────────────────────────
 class ANIM_PT_digital_twin(Panel):
     bl_label = "Digital Twin"
     bl_idname = "ANIM_PT_digital_twin"
@@ -115,7 +109,20 @@ class ANIM_PT_digital_twin(Panel):
     bl_category = "Twin"
 
     def draw(self, context):
-        pass  # subpanels carry all content
+        pass
+
+
+class ANIM_PT_animate(Panel):
+    bl_label = "Animation"
+    bl_idname = "ANIM_PT_animate"
+    bl_parent_id = "ANIM_PT_digital_twin"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Twin"
+    bl_order = 0
+
+    def draw(self, context):
+        self.layout.operator("anim.animate_path", icon='PLAY')
 
 
 # ── Ray tracing subpanel ──────────────────────────────────────────────────
@@ -132,24 +139,19 @@ class ANIM_PT_raytracing(Panel):
         scene = context.scene
 
         layout.operator("anim.raytracing_sim", icon='PLAY')
-
         layout.separator()
 
-        # Collision count summary
         count = len(scene.collision_list)
         if count == 0:
             layout.label(text="No collisions detected", icon='CHECKMARK')
         else:
             layout.label(text=f"{count} collision(s) detected", icon='ERROR')
-
             layout.template_list(
                 "COLLISION_UL_list", "",
                 scene, "collision_list",
                 scene, "collision_list_index",
-                rows=min(count, 5) 
+                rows=min(count, 5)
             )
-
-            # Jump to selected button below the list
             if scene.collision_list_index >= 0 and count > 0:
                 selected = scene.collision_list[scene.collision_list_index]
                 op = layout.operator("collision.goto_frame",
@@ -177,7 +179,6 @@ class ANIM_PT_display(Panel):
             text="Rays: ON" if scene.show_rays else "Rays: OFF",
             icon='HIDE_OFF' if scene.show_rays else 'HIDE_ON'
         )
-
         row = layout.row()
         row.operator(
             "anim.toggle_hulls",
@@ -190,25 +191,20 @@ classes = [
     CollisionEvent,
     COLLISION_UL_list,
     COLLISION_OT_goto_frame,
+    ANIM_OT_animate,
     ANIM_OT_raytracing,
     ANIM_OT_toggle_rays,
     ANIM_OT_toggle_hulls,
     ANIM_PT_digital_twin,
+    ANIM_PT_animate,
     ANIM_PT_raytracing,
     ANIM_PT_display,
 ]
 
 
 def register():
-    rt_dir = find_rt_module()
-    if rt_dir is None:
-        raise ImportError("Could not find ray_tracing.py")
-    if rt_dir not in sys.path:
-        sys.path.append(rt_dir)
-
     for cls in classes:
         bpy.utils.register_class(cls)
-
     bpy.types.Scene.collision_list = CollectionProperty(type=CollisionEvent)
     bpy.types.Scene.collision_list_index = IntProperty(default=0)
     bpy.types.Scene.show_rays = BoolProperty(name="Show Rays", default=False)
@@ -216,9 +212,11 @@ def register():
 
 
 def unregister():
-    del bpy.types.Scene.collision_list
-    del bpy.types.Scene.collision_list_index
-    del bpy.types.Scene.show_rays
-    del bpy.types.Scene.show_hulls
+    for attr in ("collision_list", "collision_list_index", "show_rays", "show_hulls"):
+        if hasattr(bpy.types.Scene, attr):
+            delattr(bpy.types.Scene, attr)
     for cls in reversed(classes):
-        bpy.utils.unregister_class(cls)
+        try:
+            bpy.utils.unregister_class(cls)
+        except RuntimeError:
+            pass

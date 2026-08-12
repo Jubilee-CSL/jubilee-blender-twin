@@ -77,46 +77,55 @@ def build_path(lines: list[str], distance_per_step: float) -> list[np.ndarray]:
     return path
 
 
-def main():
-    if len(sys.argv) > 1:
-        fn = sys.argv[1]
-        if not os.path.isfile(fn):
-            # not found locally — search in science_jubilee gcode_logs/
-            from importlib.metadata import entry_points
-            eps = [ep for ep in entry_points(group="jubilee.paths") if ep.name == "jubilee_dir"]
-            if not eps:
-                raise RuntimeError(
-                    f"File not found: {fn}\n"
-                    "jubilee.paths/jubilee_dir not registered — run inside environment with science-jubilee installed."
-                )
-            jubilee_root = eps[0].load()()
-            candidate = os.path.join(str(jubilee_root), "gcode_logs", fn)
-            if not os.path.isfile(candidate):
-                raise FileNotFoundError(
-                    f"'{fn}' not found in cwd or in {os.path.join(str(jubilee_root), 'gcode_logs')}"
-                )
-            fn = candidate
-    else:
-        fn = _discover_gcode_file()
-    try:
-        distance_per_step = float(sys.argv[2])
-    except (IndexError, ValueError):
-        distance_per_step = DEFAULT_DISTANCE_PER_STEP
+def _resolve_gcode_file(fn: str) -> str:
+    """Resolve a filename or path to an existing gcode file."""
+    if not os.path.isfile(fn):
+        from importlib.metadata import entry_points
+        eps = [ep for ep in entry_points(group="jubilee.paths") if ep.name == "jubilee_dir"]
+        if not eps:
+            raise RuntimeError(
+                f"File not found: {fn}\n"
+                "jubilee.paths/jubilee_dir not registered — run inside environment with science-jubilee installed."
+            )
+        jubilee_root = eps[0].load()()
+        candidate = os.path.join(str(jubilee_root), "gcode_logs", fn)
+        if not os.path.isfile(candidate):
+            raise FileNotFoundError(
+                f"'{fn}' not found in cwd or in {os.path.join(str(jubilee_root), 'gcode_logs')}"
+            )
+        fn = candidate
+    return fn
 
+
+def run(
+    gcode_file: str = None,
+    distance_per_step: float = DEFAULT_DISTANCE_PER_STEP,
+    output_dir: str = None,
+) -> str:
+    """Parse gcode and write pathout.csv. Returns the output path."""
+    fn = _resolve_gcode_file(gcode_file) if gcode_file else _discover_gcode_file()
     with open(fn, 'r') as f:
         lines = f.readlines()
-
     path = build_path(lines, distance_per_step)
 
-    # Write x,y,z rows (feedrate is internal-only and not needed downstream).
-    # Newlines are written before each row rather than after to avoid a trailing newline.
-    pipeline_data_dir = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "pipeline_data"))
-    os.makedirs(pipeline_data_dir, exist_ok=True)
-    with open(os.path.join(pipeline_data_dir, 'pathout.csv'), 'w') as f2:
+    out_dir = output_dir or os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "pipeline_data"))
+    os.makedirs(out_dir, exist_ok=True)
+    out_csv = os.path.join(out_dir, "pathout.csv")
+    with open(out_csv, 'w') as f2:
         for i, pos in enumerate(path):
             if i != 0:
                 f2.write('\n')
             f2.write(f"{pos[0]},{pos[1]},{pos[2]},{pos[3]},{pos[4]},{pos[5]}")
+    return out_csv
+
+
+def main():
+    fn = sys.argv[1] if len(sys.argv) > 1 else None
+    try:
+        distance_per_step = float(sys.argv[2])
+    except (IndexError, ValueError):
+        distance_per_step = DEFAULT_DISTANCE_PER_STEP
+    run(gcode_file=fn, distance_per_step=distance_per_step)
 
 
 if __name__ == "__main__":

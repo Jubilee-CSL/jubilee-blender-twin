@@ -95,43 +95,31 @@ def extract_offset(sys_dir):
                             offsets[idx] = nl[:3]
     return offsets
 
-if __name__ == "__main__":
-
-    if len(sys.argv) > 1:
-        target_sys_dir = os.path.abspath(sys.argv[1])
-    else:
-        target_sys_dir = _discover_sys_dir()
-
-    print(f"Targeting config directory: {target_sys_dir}")
-    
+def run(sys_dir: str = None, output_dir: str = None) -> str:
+    """Extract tool data and write tool_data.csv. Returns the output path."""
+    target_sys_dir = os.path.abspath(sys_dir) if sys_dir else _discover_sys_dir()
     tool_names = extract_names(target_sys_dir)
     tool_parks = extract_parks(target_sys_dir)
     tool_offsets = extract_offset(target_sys_dir)
 
-    pipeline_data_dir = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "pipeline_data"))
-    os.makedirs(pipeline_data_dir, exist_ok=True)
-    output_csv = os.path.join(pipeline_data_dir, "tool_data.csv")
-    
+    out_dir = output_dir or os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "pipeline_data"))
+    os.makedirs(out_dir, exist_ok=True)
+    output_csv = os.path.join(out_dir, "tool_data.csv")
+
     with open(output_csv, mode='w', newline='') as file:
         writer = csv.writer(file)
-        
-        # Write Headers
-        writer.writerow([
-            "Tool_ID", "Name", 
-            "Park_X", "Park_Y", "Park_Z", 
-            "Offset_X", "Offset_Y", "Offset_Z"
-        ])
-        
-        # Write rows for Tools 0 through 3
+        writer.writerow(["Tool_ID", "Name", "Park_X", "Park_Y", "Park_Z", "Offset_X", "Offset_Y", "Offset_Z"])
         for i in range(4):
             name = tool_names.get(i, f"Unassigned_Tool_{i}")
             park = tool_parks.get(i, np.array([0.0, 0.0, 0.0]))
             offset = tool_offsets.get(i, np.array([0.0, 0.0, 0.0]))
-            
-            writer.writerow([
-                i, name,
-                park[0], park[1], park[2],
-                offset[0], offset[1], offset[2]
-            ])
-            
+            writer.writerow([i, name, park[0], park[1], park[2], offset[0], offset[1], offset[2]])
+
     print(f"Extraction successful! Data saved to {output_csv}")
+    return output_csv
+
+
+if __name__ == "__main__":
+    sys_dir_arg = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else None
+    print(f"Targeting config directory: {sys_dir_arg or '(auto-discover)'}")
+    run(sys_dir=sys_dir_arg)
