@@ -20,7 +20,7 @@ sys.path.append(os.path.dirname("collision_detection.py"))
 from collision_detection import _build_hull_geometry
 
 # Path to the CSV file (relative to the .blend file)
-csv_path = bpy.path.abspath("//from_gcode/pathout.csv")
+csv_path = bpy.path.abspath("//pipeline_data/pathout.csv")
 scene = bpy.context.scene
 depsgraph = bpy.context.evaluated_depsgraph_get()
 

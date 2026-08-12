@@ -25,8 +25,8 @@ if _from_gcode_dir not in sys.path:
 from utils import get_axis_min, get_axis_max
 
 # Path to the CSV file (relative to the .blend file)
-csv_path = bpy.path.abspath("//from_gcode/pathout.csv")
-tool_data_path = bpy.path.abspath("//from_gcode/tool_data.csv")
+csv_path = bpy.path.abspath("//pipeline_data/pathout.csv")
+tool_data_path = bpy.path.abspath("//pipeline_data/tool_data.csv")
 
 def apply_offset(x,y,z,tool_id):
     with open(tool_data_path, newline='') as csvfile:
