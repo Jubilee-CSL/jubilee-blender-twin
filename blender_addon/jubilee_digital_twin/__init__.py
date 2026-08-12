@@ -108,6 +108,18 @@ class ANIM_OT_place_tools(Operator):
         return {'FINISHED'}
 
 
+# ── Populate deck operator ───────────────────────────────────────────────
+class ANIM_OT_populate_deck(Operator):
+    bl_idname = "anim.populate_deck"
+    bl_label = "Populate Deck"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        from . import populate_deck as pd
+        pd.populate_deck()
+        return {'FINISHED'}
+
+
 # ── Run ray tracing operator ──────────────────────────────────────────────
 class ANIM_OT_raytracing(Operator):
     bl_idname = "anim.raytracing_sim"
@@ -195,6 +207,7 @@ class ANIM_PT_setup(Panel):
 
     def draw(self, context):
         self.layout.operator("anim.place_tools", icon='TOOL_SETTINGS')
+        self.layout.operator("anim.populate_deck", icon='OUTLINER_OB_SURFACE')
 
 
 # ── Ray tracing subpanel ──────────────────────────────────────────────────
@@ -264,6 +277,7 @@ classes = [
     COLLISION_UL_list,
     COLLISION_OT_goto_frame,
     ANIM_OT_place_tools,
+    ANIM_OT_populate_deck,
     ANIM_OT_animate,
     ANIM_OT_raytracing,
     ANIM_OT_toggle_rays,

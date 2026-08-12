@@ -41,9 +41,10 @@ class TwinDriver:
 
         td = twin_dir()
         cache: dict = {"twin_dir": str(td)}
-        eps = [ep for ep in entry_points(group="jubilee.paths") if ep.name == "jubilee_dir"]
-        if eps:
-            cache["jubilee_dir"] = str(eps[0].load()())
+        for key in ("jubilee_dir", "interface_dir"):
+            eps = [ep for ep in entry_points(group="jubilee.paths") if ep.name == key]
+            if eps:
+                cache[key] = str(eps[0].load()())
         cache_path = td / "pipeline_data" / "jubilee_paths.json"
         cache_path.parent.mkdir(exist_ok=True)
         cache_path.write_text(json.dumps(cache, indent=2))
