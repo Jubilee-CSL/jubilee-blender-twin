@@ -13,7 +13,7 @@ def test_twin_dir_points_to_real_directory():
     td = twin_dir()
     assert td.exists(), f"twin_dir() returned non-existent path: {td}"
     assert (td / "jubilee_twin" / "pipeline").exists()
-    assert (td / "blender_scripts").exists()
+    assert (td / "blender_addon" / "jubilee_digital_twin").exists()
     assert (td / "blender_models").exists()
 
 

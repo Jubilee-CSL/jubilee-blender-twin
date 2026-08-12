@@ -338,6 +338,9 @@ def _compute_directions_CH(scene,frame_num):
         for row in reader:
             tools.append(row[5])
 
+    # frame_num may exceed len(tools) if scene frame range includes frame 0
+    frame_num = min(frame_num, len(tools))
+
     directions = np.zeros((frame_num,3))
     hull_origins = np.zeros((frame_num,3))
 
@@ -445,7 +448,9 @@ def ray_tracing_CD():
 
     anim.hull_origins, anim.directions = _compute_directions_CH(scene,anim.frame_num)
 
-    for frame in range(scene.frame_start+1,scene.frame_end):
+    # cap at actual array size — directions uses 1-based frame as index
+    safe_end = min(scene.frame_end, len(anim.directions))
+    for frame in range(scene.frame_start+1, safe_end):
         scene.frame_set(frame)
         bpy.context.evaluated_depsgraph_get()
 
@@ -477,8 +482,9 @@ def ray_tracing_CD():
     scene.frame_set(scene.frame_start + 1)
 
 
-
-
+# Run automatically when executed as a --python script (not when imported by the addon)
+if __name__ == "__main__":
+    ray_tracing_CD()
 
 
     
