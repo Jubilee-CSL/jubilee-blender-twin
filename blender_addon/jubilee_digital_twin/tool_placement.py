@@ -6,28 +6,14 @@ import numpy as np
 import mathutils
 from pathlib import Path
 
-# bpy.data.filepath is always defined inside Blender, unlike __file__
-# blender_models/ is one level below twin root
-SCRIPT_DIR = Path(os.path.dirname(os.path.dirname(bpy.data.filepath)))
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
-from jubilee_twin.pipeline.utils import get_axis_min, get_axis_max
 
+def _setup():
+    # blender_models/ is one level below twin root → dirname twice
+    twin_root = Path(os.path.dirname(os.path.dirname(bpy.data.filepath)))
+    if str(twin_root) not in sys.path:
+        sys.path.insert(0, str(twin_root))
+    return twin_root
 
-# Animate 'X-axis' in X, 'Y-axis' in Y, and 'Z-axis' in Z if present
-x_axis = bpy.data.objects.get("X-axis")
-y_axis = bpy.data.objects.get("Y-axis")
-z_axis = bpy.data.objects.get("Z-axis")
-if x_axis is None:
-    raise Exception("No object named 'X-axis' in the scene!")
-if y_axis is None:
-    raise Exception("No object named 'Y-axis' in the scene!")
-
-x_max = get_axis_max(x_axis, 'X')
-y_max= get_axis_max(y_axis, 'Y')
-
-x_axis.location.x = x_max
-y_axis.location.y = y_max
 
 def get_or_create_collection(name):
     if name in bpy.data.collections:
@@ -66,8 +52,21 @@ def move_to_pos(tool_name,x_pos,y_pos):
         
 
 def place_tools():
-    blend_dir = SCRIPT_DIR / "Tools"
-    data_csv = os.path.join(str(SCRIPT_DIR), "pipeline_data", "tool_data.csv")
+    twin_root = _setup()
+    from jubilee_twin.pipeline.utils import get_axis_min, get_axis_max
+
+    x_axis = bpy.data.objects.get("X-axis")
+    y_axis = bpy.data.objects.get("Y-axis")
+    if x_axis is None:
+        raise Exception("No object named 'X-axis' in the scene!")
+    if y_axis is None:
+        raise Exception("No object named 'Y-axis' in the scene!")
+
+    x_axis.location.x = get_axis_max(x_axis, 'X')
+    y_axis.location.y = get_axis_max(y_axis, 'Y')
+
+    blend_dir = twin_root / "Tools"
+    data_csv = twin_root / "pipeline_data" / "tool_data.csv"
 
     # Get or create target parent collections
     tools_col    = get_or_create_collection("Tools")
@@ -102,7 +101,7 @@ def place_tools():
                     tools_col.children.link(appended_tool)
 
                 # Append park post
-                park_blend = SCRIPT_DIR / "Tool Post STL" / "park_post_47.blend"
+                park_blend = twin_root / "Tool Post STL" / "park_post_47.blend"
                 with bpy.data.libraries.load(str(park_blend), link=False) as (data_from, data_to):
                     if "park_post_47" in data_from.collections:
                         data_to.collections = ["park_post_47"]

@@ -1,6 +1,7 @@
 import bpy
 import sys
-from bpy.props import StringProperty, IntProperty, CollectionProperty, BoolProperty
+import os
+from bpy.props import StringProperty, IntProperty, CollectionProperty, BoolProperty, EnumProperty
 from bpy.types import PropertyGroup, UIList, Operator, Panel
 
 bl_info = {
@@ -14,7 +15,39 @@ bl_info = {
 }
 
 
-# ── Property group for one collision event ────────────────────────────────
+# ── Gcode file discovery ───────────────────────────────────────────────────
+# Module-level cache keeps the list alive between Blender redraws (Blender
+# holds raw pointers to enum items, so they must not be garbage-collected).
+_gcode_items_cache: list = []
+
+
+def _jubilee_dir() -> str | None:
+    """Read jubilee_dir written by the driver into pipeline_data/jubilee_paths.json."""
+    import json
+    twin_root = os.path.dirname(os.path.dirname(bpy.data.filepath))
+    cache_path = os.path.join(twin_root, "pipeline_data", "jubilee_paths.json")
+    if os.path.isfile(cache_path):
+        with open(cache_path) as f:
+            return json.load(f).get("jubilee_dir")
+    return None
+
+
+def _gcode_enum_items(self, context):
+    global _gcode_items_cache
+    items = []
+    jdir = _jubilee_dir()
+    if jdir:
+        gcode_logs = os.path.join(jdir, "gcode_logs")
+        if os.path.isdir(gcode_logs):
+            for fn in sorted(os.listdir(gcode_logs)):
+                if fn.endswith(".gcode"):
+                    full = os.path.join(gcode_logs, fn)
+                    items.append((full, fn, full))
+    if not items:
+        items = [("", "— run jubilee-twin setup-scene —", "")]
+    _gcode_items_cache = items
+    return _gcode_items_cache
+
 class CollisionEvent(PropertyGroup):
     frame:       IntProperty(name="Frame", default=1)
     object_name: StringProperty(name="Collided Object")
@@ -46,9 +79,32 @@ class ANIM_OT_animate(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
+        twin_root = os.path.dirname(os.path.dirname(bpy.data.filepath))
+        if twin_root not in sys.path:
+            sys.path.insert(0, twin_root)
+
+        # If a gcode file is selected, regenerate pathout.csv first
+        gcode_file = context.scene.jubilee_gcode_file
+        if gcode_file and os.path.isfile(gcode_file):
+            from jubilee_twin.pipeline import path_follower
+            pipeline_data_dir = os.path.join(twin_root, "pipeline_data")
+            path_follower.run(gcode_file=gcode_file, output_dir=pipeline_data_dir)
+
         # deferred import so bpy.data.filepath is set before animate_path runs
         from . import animate_path as ap
         ap.run_animation()
+        return {'FINISHED'}
+
+
+# ── Place tools operator ──────────────────────────────────────────────────
+class ANIM_OT_place_tools(Operator):
+    bl_idname = "anim.place_tools"
+    bl_label = "Place Tools"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        from . import tool_placement as tp
+        tp.place_tools()
         return {'FINISHED'}
 
 
@@ -122,7 +178,23 @@ class ANIM_PT_animate(Panel):
     bl_order = 0
 
     def draw(self, context):
-        self.layout.operator("anim.animate_path", icon='PLAY')
+        layout = self.layout
+        layout.prop(context.scene, "jubilee_gcode_file", text="GCode")
+        layout.operator("anim.animate_path", icon='PLAY')
+
+
+# ── Setup subpanel ────────────────────────────────────────────────────────
+class ANIM_PT_setup(Panel):
+    bl_label = "Setup"
+    bl_idname = "ANIM_PT_setup"
+    bl_parent_id = "ANIM_PT_digital_twin"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Twin"
+    bl_order = -1
+
+    def draw(self, context):
+        self.layout.operator("anim.place_tools", icon='TOOL_SETTINGS')
 
 
 # ── Ray tracing subpanel ──────────────────────────────────────────────────
@@ -191,11 +263,13 @@ classes = [
     CollisionEvent,
     COLLISION_UL_list,
     COLLISION_OT_goto_frame,
+    ANIM_OT_place_tools,
     ANIM_OT_animate,
     ANIM_OT_raytracing,
     ANIM_OT_toggle_rays,
     ANIM_OT_toggle_hulls,
     ANIM_PT_digital_twin,
+    ANIM_PT_setup,
     ANIM_PT_animate,
     ANIM_PT_raytracing,
     ANIM_PT_display,
@@ -209,10 +283,16 @@ def register():
     bpy.types.Scene.collision_list_index = IntProperty(default=0)
     bpy.types.Scene.show_rays = BoolProperty(name="Show Rays", default=False)
     bpy.types.Scene.show_hulls = BoolProperty(name="Show Hulls", default=False)
+    bpy.types.Scene.jubilee_gcode_file = EnumProperty(
+        name="GCode File",
+        description="GCode file from science_jubilee/gcode_logs/ to animate",
+        items=_gcode_enum_items,
+    )
 
 
 def unregister():
-    for attr in ("collision_list", "collision_list_index", "show_rays", "show_hulls"):
+    for attr in ("collision_list", "collision_list_index", "show_rays", "show_hulls",
+                 "jubilee_gcode_file"):
         if hasattr(bpy.types.Scene, attr):
             delattr(bpy.types.Scene, attr)
     for cls in reversed(classes):

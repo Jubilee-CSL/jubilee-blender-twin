@@ -10,6 +10,13 @@ def main():
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    # --- setup-scene ---
+    setup_scene = subparsers.add_parser(
+        "setup-scene",
+        help="Copy jubilee_base.blend → pipeline_data/jubilee_working.blend and populate tools.",
+    )
+    setup_scene.add_argument("--blender", default=None, metavar="EXE")
+
     # --- prepare ---
     prepare = subparsers.add_parser("prepare", help="Generate pipeline_data/ CSVs only (no Blender).")
     prepare.add_argument("gcode", help="Path to gcode file.")
@@ -33,14 +40,19 @@ def main():
     raytrace.add_argument("--blender", default=None, metavar="EXE")
 
     # --- open ---
-    subparsers.add_parser("open", help="Open jubilee_belt.blend in the Blender GUI.")
+    open_cmd = subparsers.add_parser("open", help="Open the working blend file (or jubilee_belt.blend) in the Blender GUI.")
+    open_cmd.add_argument("--blender", default=None, metavar="EXE")
 
     args = parser.parse_args()
 
     from jubilee_twin.driver import TwinDriver
     driver = TwinDriver(blender_exe=args.blender if hasattr(args, "blender") else None)
 
-    if args.command == "prepare":
+    if args.command == "setup-scene":
+        rc = driver.setup_scene()
+        raise SystemExit(rc)
+
+    elif args.command == "prepare":
         from jubilee_twin.pipeline import tool_id, path_follower
         from jubilee_twin.paths import twin_dir
         pipeline_data_dir = str(twin_dir() / "pipeline_data")

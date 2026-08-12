@@ -34,6 +34,56 @@ class TwinDriver:
             raise RuntimeError(f"twin_dir() returned a path that does not exist: {td}")
         return cls(blender_exe=blender_exe)
 
+    def _write_paths_cache(self) -> None:
+        """Write pipeline_data/jubilee_paths.json so Blender addon can locate gcode_logs/."""
+        import json
+        from importlib.metadata import entry_points
+
+        td = twin_dir()
+        cache: dict = {"twin_dir": str(td)}
+        eps = [ep for ep in entry_points(group="jubilee.paths") if ep.name == "jubilee_dir"]
+        if eps:
+            cache["jubilee_dir"] = str(eps[0].load()())
+        cache_path = td / "pipeline_data" / "jubilee_paths.json"
+        cache_path.parent.mkdir(exist_ok=True)
+        cache_path.write_text(json.dumps(cache, indent=2))
+
+    def _working_blend(self) -> Path:
+        """Return the working blend file; fall back to jubilee_belt.blend if setup-scene hasn't run."""
+        td = twin_dir()
+        working = td / "pipeline_data" / "jubilee_working.blend"
+        return working if working.exists() else td / "blender_models" / "jubilee_belt.blend"
+
+    def setup_scene(self) -> int:
+        """Copy jubilee_base.blend → pipeline_data/jubilee_working.blend and populate tools.
+
+        Requires tool_data.csv in pipeline_data/ (run 'jubilee-twin prepare' first, or any
+        command that generates tool_data.csv).
+        """
+        from jubilee_twin.pipeline import tool_id
+
+        td = twin_dir()
+        pipeline_data_dir = td / "pipeline_data"
+        pipeline_data_dir.mkdir(exist_ok=True)
+
+        self._write_paths_cache()
+        # Generate tool_data.csv (does not need a gcode file)
+        tool_id.run(output_dir=str(pipeline_data_dir))
+
+        base = td / "blender_models" / "jubilee_base.blend"
+        if not base.exists():
+            raise FileNotFoundError(f"jubilee_base.blend not found at {base}")
+
+        import shutil
+        working = pipeline_data_dir / "jubilee_working.blend"
+        print(f"Copying {base.name} -> {working} ...")
+        shutil.copy2(base, working)
+
+        tool_script = td / "blender_addon" / "jubilee_digital_twin" / "tool_placement.py"
+        print("Populating tools (headless Blender)...")
+        cmd = [self.blender_exe, str(working), "--background", "--python", str(tool_script)]
+        return subprocess.run(cmd).returncode
+
     def animate_from_gcode(
         self,
         gcode_file: Path,
@@ -54,6 +104,7 @@ class TwinDriver:
 
         td = twin_dir()
         pipeline_data_dir = str(td / "pipeline_data")
+        self._write_paths_cache()
 
         print("Step 1/3: extracting tool data...")
         tool_id.run(output_dir=pipeline_data_dir)
@@ -66,7 +117,7 @@ class TwinDriver:
         )
 
         print("Step 3/3: launching Blender...")
-        blend = td / "blender_models" / "jubilee_belt.blend"
+        blend = self._working_blend()
         script = td / "blender_addon" / "jubilee_digital_twin" / "animate_path.py"
         cmd = [self.blender_exe, str(blend)]
         if not interactive:
@@ -75,13 +126,13 @@ class TwinDriver:
         return subprocess.run(cmd).returncode
 
     def open_interactive(self) -> None:
-        """Open jubilee_belt.blend in the Blender GUI without running any script."""
-        subprocess.Popen([self.blender_exe, str(twin_dir() / "blender_models" / "jubilee_belt.blend")])
+        """Open the working blend file in the Blender GUI without running any script."""
+        subprocess.Popen([self.blender_exe, str(self._working_blend())])
 
     def run_raytracing(self, interactive: bool = False) -> int:
         """Animate the scene then run ray-tracing, in a single Blender session."""
         td = twin_dir()
-        blend = td / "blender_models" / "jubilee_belt.blend"
+        blend = self._working_blend()
         animate_script = td / "blender_addon" / "jubilee_digital_twin" / "animate_path.py"
         raytrace_script = td / "blender_addon" / "jubilee_digital_twin" / "ray_tracing.py"
         cmd = [self.blender_exe, str(blend)]
