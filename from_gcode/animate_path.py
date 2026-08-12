@@ -18,7 +18,10 @@ import sys
 import os
 import numpy as np
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# bpy.data.filepath is always defined inside Blender, unlike __file__
+_from_gcode_dir = os.path.join(os.path.dirname(bpy.data.filepath), "from_gcode")
+if _from_gcode_dir not in sys.path:
+    sys.path.insert(0, _from_gcode_dir)
 from utils import get_axis_min, get_axis_max
 
 # Path to the CSV file (relative to the .blend file)
