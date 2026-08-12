@@ -1,5 +1,4 @@
 import bpy
-import os
 import numpy as np
 from mathutils import Vector
 import bmesh
@@ -271,37 +270,6 @@ def _gen_convex_hull(target_list,name,depsgraph):
 
     return  obj_hull, hull_mesh
 
-
-def _load_gantry_hull(blend_path: str, hulls_col) -> "bpy.types.Object | None":
-    """Append the pre-made Gantry_hull from jubilee_belt.blend instead of computing it."""
-    existing = bpy.data.objects.get("Gantry_hull")
-    if existing:
-        bpy.data.objects.remove(existing, do_unlink=True)
-
-    with bpy.data.libraries.load(blend_path, link=False) as (data_from, data_to):
-        if "Gantry_hull" not in data_from.objects:
-            print(f"Gantry_hull not found in {blend_path}, will compute at runtime")
-            return None
-        data_to.objects = ["Gantry_hull"]
-
-    hull_obj = bpy.data.objects.get("Gantry_hull")
-    if hull_obj is None:
-        return None
-
-    bpy.context.scene.collection.objects.link(hull_obj)
-    hulls_col.objects.link(hull_obj)
-
-    # Re-link constraint target — append severs cross-file references
-    anchor = bpy.data.objects.get("carriage_Carriage Center Plate")
-    for constraint in hull_obj.constraints:
-        if constraint.type == 'COPY_TRANSFORMS':
-            constraint.target = anchor
-            break
-
-    hull_obj.hide_set(True)
-    return hull_obj
-
-
 def _gen_tool_hulls(scene,depsgraph):
     global _tool_changing_dict
     global _target_dict
@@ -339,20 +307,11 @@ def _gen_tool_hulls(scene,depsgraph):
         print(f"VISION DICT:{_vision_dict[current_tool_id]}")
         print("-"*60)
 
-        hull_obj_names = [o.name for o in bpy.data.collections["Tool Hulls"].all_objects]
-        if current_tool_name+"_hull" not in hull_obj_names:
-            if current_tool_enum == GantryHead.NOTOOL:
-                # Load pre-made hull from jubilee_belt.blend (faster + artist-approved shape)
-                twin_root = os.path.dirname(os.path.dirname(bpy.data.filepath))
-                belt_blend = os.path.join(twin_root, "blender_models", "jubilee_belt.blend")
-                obj_hull = _load_gantry_hull(belt_blend, col) if os.path.isfile(belt_blend) else None
-                if obj_hull is None:
-                    obj_hull, _ = _gen_convex_hull(_target_dict[current_tool_id], current_tool_name+"_hull", depsgraph)
-                    bpy.data.collections["Tool Hulls"].objects.link(obj_hull)
-            else:
-                obj_hull, _ = _gen_convex_hull(_target_dict[current_tool_id], current_tool_name+"_hull", depsgraph)
-                bpy.data.collections["Tool Hulls"].objects.link(obj_hull)
+        if current_tool_name+"_hull" not in bpy.data.collections["Tool Hulls"].all_objects:
+            obj_hull,hull_mesh = _gen_convex_hull(_target_dict[current_tool_id],current_tool_name+"_hull",depsgraph)
+            
             _tool_hulls_dict[current_tool_enum] = obj_hull
+            bpy.data.collections["Tool Hulls"].objects.link(obj_hull)
             
         for obj in bpy.data.collections["Tool Hulls"].all_objects:
             obj.hide_set(True)            
