@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=46"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jubilee-twin"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = ["numpy"]
+
+[project.entry-points."jubilee.paths"]
+twin_dir = "jubilee_twin.paths:twin_dir"
+
+[project.entry-points."science_jubilee.digital_twin"]
+default = "jubilee_twin.driver:run_twin"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["jubilee_twin*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

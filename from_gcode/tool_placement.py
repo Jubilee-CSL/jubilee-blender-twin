@@ -6,9 +6,10 @@ import numpy as np
 import mathutils
 from pathlib import Path
 
-SCRIPT_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
-
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# bpy.data.filepath is always defined inside Blender, unlike __file__
+SCRIPT_DIR = Path(os.path.dirname(bpy.data.filepath)) / "from_gcode"
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
 from utils import get_axis_min, get_axis_max
 
 
