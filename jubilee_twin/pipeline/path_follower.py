@@ -12,10 +12,8 @@ Outputs pathout.csv in the current working directory, with one x,y,z row per ste
 import sys
 import os
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
 import numpy as np
-from gcode_handlers import parse_command, GCodeMachine
+from .gcode_handlers import parse_command, GCodeMachine
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -112,7 +110,7 @@ def main():
 
     # Write x,y,z rows (feedrate is internal-only and not needed downstream).
     # Newlines are written before each row rather than after to avoid a trailing newline.
-    pipeline_data_dir = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "pipeline_data"))
+    pipeline_data_dir = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "pipeline_data"))
     os.makedirs(pipeline_data_dir, exist_ok=True)
     with open(os.path.join(pipeline_data_dir, 'pathout.csv'), 'w') as f2:
         for i, pos in enumerate(path):

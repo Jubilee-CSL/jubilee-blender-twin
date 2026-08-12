@@ -12,9 +12,9 @@ def test_twin_dir_points_to_real_directory():
     from jubilee_twin.paths import twin_dir
     td = twin_dir()
     assert td.exists(), f"twin_dir() returned non-existent path: {td}"
-    assert (td / "from_gcode").exists()
-    assert (td / "jubilee_belt.blend").exists()
-    assert (td / "config").exists()
+    assert (td / "jubilee_twin" / "pipeline").exists()
+    assert (td / "blender_scripts").exists()
+    assert (td / "blender_models").exists()
 
 
 def test_digital_twin_entry_point_registered():

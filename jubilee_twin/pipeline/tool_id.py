@@ -2,7 +2,7 @@ import sys
 import os
 import csv
 import numpy as np
-from utils import _extract_numeric_after, find_coord
+from .utils import _extract_numeric_after, find_coord
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -108,7 +108,7 @@ if __name__ == "__main__":
     tool_parks = extract_parks(target_sys_dir)
     tool_offsets = extract_offset(target_sys_dir)
 
-    pipeline_data_dir = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "pipeline_data"))
+    pipeline_data_dir = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "pipeline_data"))
     os.makedirs(pipeline_data_dir, exist_ok=True)
     output_csv = os.path.join(pipeline_data_dir, "tool_data.csv")
     

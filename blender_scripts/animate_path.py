@@ -19,14 +19,15 @@ import os
 import numpy as np
 
 # bpy.data.filepath is always defined inside Blender, unlike __file__
-_from_gcode_dir = os.path.join(os.path.dirname(bpy.data.filepath), "from_gcode")
-if _from_gcode_dir not in sys.path:
-    sys.path.insert(0, _from_gcode_dir)
-from utils import get_axis_min, get_axis_max
+# blender_models/ is one level below twin root
+_twin_root = os.path.dirname(os.path.dirname(bpy.data.filepath))
+if _twin_root not in sys.path:
+    sys.path.insert(0, _twin_root)
+from jubilee_twin.pipeline.utils import get_axis_min, get_axis_max
 
-# Path to the CSV file (relative to the .blend file)
-csv_path = bpy.path.abspath("//pipeline_data/pathout.csv")
-tool_data_path = bpy.path.abspath("//pipeline_data/tool_data.csv")
+# // is relative to the .blend file (inside blender_models/), so .. goes up to twin root
+csv_path = bpy.path.abspath("//../pipeline_data/pathout.csv")
+tool_data_path = bpy.path.abspath("//../pipeline_data/tool_data.csv")
 
 def apply_offset(x,y,z,tool_id):
     with open(tool_data_path, newline='') as csvfile:

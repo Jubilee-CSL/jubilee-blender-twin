@@ -10,7 +10,7 @@ import os
 import sys
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-tool_data_path = os.path.join(SCRIPT_DIR, "..", "pipeline_data", "tool_data.csv")
+tool_data_path = os.path.join(SCRIPT_DIR, "..", "..", "pipeline_data", "tool_data.csv")
 
 def _identify_tool(x,y):
     with open(tool_data_path, newline='') as csvfile:

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import numpy as np
 from math import ceil
-from utils import find_coord, dis
+from .utils import find_coord, dis
 
 
 # ---------------------------------------------------------------------------
