@@ -24,6 +24,22 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_DISTANCE_PER_STEP = 50.0
 
 
+def _discover_gcode_file() -> str:
+    """Resolve the latest gcode log via the jubilee.paths/jubilee_dir entry point."""
+    from importlib.metadata import entry_points
+    eps = [ep for ep in entry_points(group="jubilee.paths") if ep.name == "jubilee_dir"]
+    if not eps:
+        raise RuntimeError(
+            "jubilee.paths/jubilee_dir entry point not found. "
+            "Run inside the pixi environment: pixi run python path_follower.py"
+        )
+    jubilee_root = eps[0].load()()
+    candidate = os.path.join(str(jubilee_root), "gcode_logs", "latest.gcode")
+    if not os.path.isfile(candidate):
+        raise RuntimeError(f"gcode_logs/latest.gcode not found at: {candidate}")
+    return candidate
+
+
 def build_path(lines: list[str], distance_per_step: float) -> list[np.ndarray]:
     """
     Walk through gcode lines and build a list of interpolated [x, y, z, f] positions.
@@ -64,7 +80,26 @@ def build_path(lines: list[str], distance_per_step: float) -> list[np.ndarray]:
 
 
 def main():
-    fn = sys.argv[1] if len(sys.argv) > 1 else os.path.join(SCRIPT_DIR, 'path.gcode')
+    if len(sys.argv) > 1:
+        fn = sys.argv[1]
+        if not os.path.isfile(fn):
+            # not found locally — search in science_jubilee gcode_logs/
+            from importlib.metadata import entry_points
+            eps = [ep for ep in entry_points(group="jubilee.paths") if ep.name == "jubilee_dir"]
+            if not eps:
+                raise RuntimeError(
+                    f"File not found: {fn}\n"
+                    "jubilee.paths/jubilee_dir not registered — run inside environment with science-jubilee installed."
+                )
+            jubilee_root = eps[0].load()()
+            candidate = os.path.join(str(jubilee_root), "gcode_logs", fn)
+            if not os.path.isfile(candidate):
+                raise FileNotFoundError(
+                    f"'{fn}' not found in cwd or in {os.path.join(str(jubilee_root), 'gcode_logs')}"
+                )
+            fn = candidate
+    else:
+        fn = _discover_gcode_file()
     try:
         distance_per_step = float(sys.argv[2])
     except (IndexError, ValueError):
@@ -77,7 +112,9 @@ def main():
 
     # Write x,y,z rows (feedrate is internal-only and not needed downstream).
     # Newlines are written before each row rather than after to avoid a trailing newline.
-    with open(os.path.join(SCRIPT_DIR, 'pathout.csv'), 'w') as f2:
+    pipeline_data_dir = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "pipeline_data"))
+    os.makedirs(pipeline_data_dir, exist_ok=True)
+    with open(os.path.join(pipeline_data_dir, 'pathout.csv'), 'w') as f2:
         for i, pos in enumerate(path):
             if i != 0:
                 f2.write('\n')

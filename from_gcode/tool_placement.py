@@ -66,7 +66,7 @@ def move_to_pos(tool_name,x_pos,y_pos):
 
 def place_tools():
     blend_dir = SCRIPT_DIR.parent / "Tools"
-    data_csv = os.path.join(SCRIPT_DIR, "tool_data.csv")
+    data_csv = os.path.join(SCRIPT_DIR.parent, "pipeline_data", "tool_data.csv")
 
     # Get or create target parent collections
     tools_col    = get_or_create_collection("Tools")

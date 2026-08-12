@@ -108,8 +108,9 @@ if __name__ == "__main__":
     tool_parks = extract_parks(target_sys_dir)
     tool_offsets = extract_offset(target_sys_dir)
 
-    # Output to CSV in the from_gcode directory
-    output_csv = os.path.join(SCRIPT_DIR, "tool_data.csv")
+    pipeline_data_dir = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "pipeline_data"))
+    os.makedirs(pipeline_data_dir, exist_ok=True)
+    output_csv = os.path.join(pipeline_data_dir, "tool_data.csv")
     
     with open(output_csv, mode='w', newline='') as file:
         writer = csv.writer(file)

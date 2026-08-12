@@ -12,8 +12,8 @@ xy_carriage = bpy.data.collections["XY-carriage"]
 y_parts = bpy.data.collections["Y-parts"]
 
 # Path to the CSV file (relative to the .blend file)
-csv_path = bpy.path.abspath("//from_gcode/pathout.csv")
-tool_data_path = bpy.path.abspath("//from_gcode/tool_data.csv")
+csv_path = bpy.path.abspath("//pipeline_data/pathout.csv")
+tool_data_path = bpy.path.abspath("//pipeline_data/tool_data.csv")
 
 STATIC_DIRECTION = np.array([0.0, 0.0, -0.01])  
 STATIC_DISTANCE  = 0.01
