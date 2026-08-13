@@ -100,6 +100,10 @@ class ANIM_OT_animate(Operator):
 class ANIM_OT_place_tools(Operator):
     bl_idname = "anim.place_tools"
     bl_label = "Place Tools"
+    bl_description = (
+        "Load tool .blend files and parking posts into the scene.\n"
+        "Requires pipeline_data/tool_data.csv — run 'jubilee-twin setup-scene' first."
+    )
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -112,6 +116,11 @@ class ANIM_OT_place_tools(Operator):
 class ANIM_OT_populate_deck(Operator):
     bl_idname = "anim.populate_deck"
     bl_label = "Populate Deck"
+    bl_description = (
+        "Load labware from the latest experiment folder into the scene.\n"
+        "Requires pipeline_data/jubilee_paths.json (run 'jubilee-twin setup-scene') "
+        "and a deck.blend exported by the interface app."
+    )
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -206,8 +215,21 @@ class ANIM_PT_setup(Panel):
     bl_order = -1
 
     def draw(self, context):
-        self.layout.operator("anim.place_tools", icon='TOOL_SETTINGS')
-        self.layout.operator("anim.populate_deck", icon='OUTLINER_OB_SURFACE')
+        layout = self.layout
+        twin_root = os.path.dirname(os.path.dirname(bpy.data.filepath))
+        pipeline_data = os.path.join(twin_root, "pipeline_data")
+
+        has_paths = os.path.isfile(os.path.join(pipeline_data, "jubilee_paths.json"))
+        has_tools = os.path.isfile(os.path.join(pipeline_data, "tool_data.csv"))
+
+        if not has_paths or not has_tools:
+            col = layout.column(align=True)
+            col.alert = True
+            col.label(text="Run 'jubilee-twin setup-scene' first", icon='ERROR')
+            layout.separator()
+
+        layout.operator("anim.place_tools", icon='TOOL_SETTINGS')
+        layout.operator("anim.populate_deck", icon='OUTLINER_OB_SURFACE')
 
 
 # ── Ray tracing subpanel ──────────────────────────────────────────────────

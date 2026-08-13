@@ -124,5 +124,12 @@ def populate_deck() -> None:
     print(f"[populate_deck] {len(labware_objs)} labware placed on {z_plate.name}.")
 
 
-if __name__ == "__main__":
+def main():
     populate_deck()
+
+    bpy.ops.wm.save_as_mainfile(filepath=bpy.data.filepath)
+    bpy.ops.wm.quit_blender()
+
+
+if __name__ == "__main__":
+    main()
