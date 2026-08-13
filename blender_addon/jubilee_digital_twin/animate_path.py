@@ -124,13 +124,18 @@ def run_animation():
             gantry_anchor = gantry.objects[0]
             bpy.context.scene.frame_set(frame)
             bpy.context.view_layer.update()
+            # Read matrix_world from the evaluated depsgraph — required in --background mode,
+            # where accessing obj.matrix_world directly returns the stale, pre-animation value.
+            depsgraph = bpy.context.evaluated_depsgraph_get()
+            gantry_anchor_eval = gantry_anchor.evaluated_get(depsgraph)
+            gantry_world = gantry_anchor_eval.matrix_world.copy()
 
-            print(f"Frame {frame}: gantry at {gantry_anchor.matrix_world.translation}")
+            print(f"Frame {frame}: gantry at {gantry_world.translation}")
             print(f"Frame {frame}: expected dock ~({(x_max - x/1000):.4f}, {(y_max - y/1000):.4f})")
             print(f"x_min={x_min}, y_min={y_min}")
             print(f"raw gcode at toolchange: x={x}mm, y={y}mm")
             print(f"expected blender pos: ({(x_max - x/1000):.4f}, {(y_max - y/1000):.4f})")
-            print(f"gantry actual pos: {gantry_anchor.matrix_world.translation.xy}")
+            print(f"gantry actual pos: {gantry_world.translation.xy}")
 
             for obj in tool.objects[:]:
                 to_remove = [c for c in obj.constraints if c.type == 'CHILD_OF']
@@ -139,7 +144,7 @@ def run_animation():
 
                 c = obj.constraints.new('CHILD_OF')
                 c.target = gantry_anchor
-                c.inverse_matrix = gantry_anchor.matrix_world.inverted()
+                c.inverse_matrix = gantry_world.inverted()
                 c.influence = 0.0
                 c.keyframe_insert(data_path="influence", frame=frame - 1)
                 c.influence = 1.0

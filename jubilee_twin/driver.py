@@ -56,33 +56,49 @@ class TwinDriver:
         return working if working.exists() else td / "blender_models" / "jubilee_belt.blend"
 
     def setup_scene(self) -> int:
-        """Copy jubilee_base.blend → pipeline_data/jubilee_working.blend and populate tools.
+        """Write tool_data.csv + jubilee_paths.json and copy jubilee_base.blend → jubilee_working.blend.
 
-        Requires tool_data.csv in pipeline_data/ (run 'jubilee-twin prepare' first, or any
-        command that generates tool_data.csv).
+        Does NOT place tools in Blender. Run 'jubilee-twin place-tools' (or use the
+        addon 'Place Tools' button) as a separate step after this.
         """
         from jubilee_twin.pipeline import tool_id
+        import shutil
 
         td = twin_dir()
         pipeline_data_dir = td / "pipeline_data"
         pipeline_data_dir.mkdir(exist_ok=True)
 
         self._write_paths_cache()
-        # Generate tool_data.csv (does not need a gcode file)
         tool_id.run(output_dir=str(pipeline_data_dir))
 
         base = td / "blender_models" / "jubilee_base.blend"
         if not base.exists():
             raise FileNotFoundError(f"jubilee_base.blend not found at {base}")
 
-        import shutil
         working = pipeline_data_dir / "jubilee_working.blend"
         print(f"Copying {base.name} -> {working} ...")
         shutil.copy2(base, working)
+        print("Done. Run 'jubilee-twin place-tools' to load tool models into the scene.")
+        return 0
 
+    def place_tools(self) -> int:
+        """Load tool .blend files and parking posts into jubilee_working.blend (headless Blender)."""
+        td = twin_dir()
+        working = self._working_blend()
         tool_script = td / "blender_addon" / "jubilee_digital_twin" / "tool_placement.py"
-        print("Populating tools (headless Blender)...")
+        print("Placing tools (headless Blender)...")
         cmd = [self.blender_exe, str(working), "--background", "--python", str(tool_script)]
+        return subprocess.run(cmd).returncode
+
+    def populate_deck(self) -> int:
+        """Load labware from the latest interface experiment into jubilee_working.blend (headless Blender)."""
+        td = twin_dir()
+        working = self._working_blend()
+        deck_script = td / "blender_addon" / "jubilee_digital_twin" / "populate_deck.py"
+        # Refresh paths cache so the script can find interface_dir even if setup-scene wasn't re-run.
+        self._write_paths_cache()
+        print("Populating deck (headless Blender)...")
+        cmd = [self.blender_exe, str(working), "--background", "--python", str(deck_script)]
         return subprocess.run(cmd).returncode
 
     def animate_from_gcode(

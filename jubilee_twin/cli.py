@@ -13,9 +13,23 @@ def main():
     # --- setup-scene ---
     setup_scene = subparsers.add_parser(
         "setup-scene",
-        help="Copy jubilee_base.blend → pipeline_data/jubilee_working.blend and populate tools.",
+        help="Write CSVs + paths cache and copy jubilee_base.blend → jubilee_working.blend.",
     )
     setup_scene.add_argument("--blender", default=None, metavar="EXE")
+
+    # --- place-tools ---
+    place_tools = subparsers.add_parser(
+        "place-tools",
+        help="Load tool .blend files and parking posts into the working blend (headless Blender).",
+    )
+    place_tools.add_argument("--blender", default=None, metavar="EXE")
+
+    # --- populate-deck ---
+    populate_deck = subparsers.add_parser(
+        "populate-deck",
+        help="Load labware from the latest interface experiment into the working blend (headless Blender).",
+    )
+    populate_deck.add_argument("--blender", default=None, metavar="EXE")
 
     # --- prepare ---
     prepare = subparsers.add_parser("prepare", help="Generate pipeline_data/ CSVs only (no Blender).")
@@ -50,6 +64,14 @@ def main():
 
     if args.command == "setup-scene":
         rc = driver.setup_scene()
+        raise SystemExit(rc)
+
+    elif args.command == "place-tools":
+        rc = driver.place_tools()
+        raise SystemExit(rc)
+
+    elif args.command == "populate-deck":
+        rc = driver.populate_deck()
         raise SystemExit(rc)
 
     elif args.command == "prepare":
