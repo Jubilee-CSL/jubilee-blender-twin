@@ -3,24 +3,10 @@ import os
 import csv
 import numpy as np
 from .utils import _extract_numeric_after, find_coord
+from jubilee_twin.paths import resolve
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-
-def _discover_sys_dir() -> str:
-    """Resolve firmware/sys/ via the jubilee.paths/jubilee_dir entry point."""
-    from importlib.metadata import entry_points
-    eps = [ep for ep in entry_points(group="jubilee.paths") if ep.name == "jubilee_dir"]
-    if not eps:
-        raise RuntimeError(
-            "jubilee.paths/jubilee_dir entry point not found. "
-            "Check that science-jubilee is installed in the environment and that jubilee.paths/jubilee_dir is registered."
-        )
-    jubilee_root = eps[0].load()()
-    candidate = os.path.join(str(jubilee_root), "firmware", "sys")
-    if not os.path.isdir(candidate):
-        raise RuntimeError(f"firmware/sys not found at: {candidate}")
-    return candidate
 
 def extract_names(sys_dir):
     names = {}
@@ -97,7 +83,12 @@ def extract_offset(sys_dir):
 
 def run(sys_dir: str = None, output_dir: str = None) -> str:
     """Extract tool data and write tool_data.csv. Returns the output path."""
-    target_sys_dir = os.path.abspath(sys_dir) if sys_dir else _discover_sys_dir()
+    if sys_dir:
+        target_sys_dir = os.path.abspath(sys_dir)
+    else:
+        target_sys_dir = str(resolve("jubilee_dir") / "firmware" / "sys")
+        if not os.path.isdir(target_sys_dir):
+            raise RuntimeError(f"firmware/sys not found at: {target_sys_dir}")
     tool_names = extract_names(target_sys_dir)
     tool_parks = extract_parks(target_sys_dir)
     tool_offsets = extract_offset(target_sys_dir)

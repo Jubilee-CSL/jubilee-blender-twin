@@ -2,19 +2,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from jubilee_twin.paths import twin_dir
-
-
-def _discover_jubilee_root() -> Path | None:
-    from importlib.metadata import entry_points
-    eps = [ep for ep in entry_points(group="jubilee.paths") if ep.name == "jubilee_dir"]
-    if eps:
-        return Path(eps[0].load()())
-    try:
-        import science_jubilee
-        return Path(science_jubilee.__file__).parents[2]
-    except ImportError:
-        return None
+from jubilee_twin.paths import resolve, twin_dir
 
 
 class TwinDriver:
@@ -23,13 +11,12 @@ class TwinDriver:
 
     @classmethod
     def from_entry_point(cls, blender_exe: str = None) -> "TwinDriver":
-        from importlib.metadata import entry_points
-        eps = [ep for ep in entry_points(group="jubilee.paths") if ep.name == "twin_dir"]
-        if not eps:
+        try:
+            td = resolve("twin_dir")
+        except RuntimeError as e:
             raise RuntimeError(
                 "jubilee-twin is not installed. Run: pip install -e jubilee-blender-twin"
-            )
-        td = eps[0].load()()
+            ) from e
         if not td.exists():
             raise RuntimeError(f"twin_dir() returned a path that does not exist: {td}")
         return cls(blender_exe=blender_exe)
@@ -37,14 +24,14 @@ class TwinDriver:
     def _write_paths_cache(self) -> None:
         """Write pipeline_data/jubilee_paths.json so Blender addon can locate gcode_logs/."""
         import json
-        from importlib.metadata import entry_points
 
         td = twin_dir()
         cache: dict = {"twin_dir": str(td)}
-        for key in ("jubilee_dir", "interface_dir"):
-            eps = [ep for ep in entry_points(group="jubilee.paths") if ep.name == key]
-            if eps:
-                cache[key] = str(eps[0].load()())
+        for key in ("jubilee_dir", "interface_dir", "experiment_deck_dir"):
+            try:
+                cache[key] = str(resolve(key))
+            except RuntimeError:
+                pass
         cache_path = td / "pipeline_data" / "jubilee_paths.json"
         cache_path.parent.mkdir(exist_ok=True)
         cache_path.write_text(json.dumps(cache, indent=2))

@@ -12,11 +12,11 @@ import pytest
 
 
 def _jubilee_root() -> Path:
-    from importlib.metadata import entry_points
-    eps = [ep for ep in entry_points(group="jubilee.paths") if ep.name == "jubilee_dir"]
-    if not eps:
+    from jubilee_twin.paths import resolve
+    try:
+        return resolve("jubilee_dir")
+    except RuntimeError:
         pytest.skip("jubilee.paths/jubilee_dir not registered — run inside virtual environment with science-jubilee installed")
-    return Path(eps[0].load()())
 
 
 def _latest_gcode() -> str:

@@ -14,28 +14,13 @@ import os
 
 import numpy as np
 from .gcode_handlers import parse_command, GCodeMachine
+from jubilee_twin.paths import resolve
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Maximum mm between consecutive output positions. Larger values produce fewer
 # rows (coarser animation); smaller values produce more rows (smoother animation).
 DEFAULT_DISTANCE_PER_STEP = 50.0
-
-
-def _discover_gcode_file() -> str:
-    """Resolve the latest gcode log via the jubilee.paths/jubilee_dir entry point."""
-    from importlib.metadata import entry_points
-    eps = [ep for ep in entry_points(group="jubilee.paths") if ep.name == "jubilee_dir"]
-    if not eps:
-        raise RuntimeError(
-            "jubilee.paths/jubilee_dir entry point not found. "
-            "Run inside the pixi environment: pixi run python path_follower.py"
-        )
-    jubilee_root = eps[0].load()()
-    candidate = os.path.join(str(jubilee_root), "gcode_logs", "latest.gcode")
-    if not os.path.isfile(candidate):
-        raise RuntimeError(f"gcode_logs/latest.gcode not found at: {candidate}")
-    return candidate
 
 
 def build_path(lines: list[str], distance_per_step: float) -> list[np.ndarray]:
@@ -77,33 +62,24 @@ def build_path(lines: list[str], distance_per_step: float) -> list[np.ndarray]:
     return path
 
 
-def _resolve_gcode_file(fn: str) -> str:
-    """Resolve a filename or path to an existing gcode file."""
-    if not os.path.isfile(fn):
-        from importlib.metadata import entry_points
-        eps = [ep for ep in entry_points(group="jubilee.paths") if ep.name == "jubilee_dir"]
-        if not eps:
-            raise RuntimeError(
-                f"File not found: {fn}\n"
-                "jubilee.paths/jubilee_dir not registered — run inside environment with science-jubilee installed."
-            )
-        jubilee_root = eps[0].load()()
-        candidate = os.path.join(str(jubilee_root), "gcode_logs", fn)
-        if not os.path.isfile(candidate):
-            raise FileNotFoundError(
-                f"'{fn}' not found in cwd or in {os.path.join(str(jubilee_root), 'gcode_logs')}"
-            )
-        fn = candidate
-    return fn
-
-
 def run(
     gcode_file: str = None,
     distance_per_step: float = DEFAULT_DISTANCE_PER_STEP,
     output_dir: str = None,
 ) -> str:
-    """Parse gcode and write pathout.csv. Returns the output path."""
-    fn = _resolve_gcode_file(gcode_file) if gcode_file else _discover_gcode_file()
+    """Parse gcode and write pathout.csv. Returns the output path.
+
+    ``gcode_file`` may be an absolute/relative path, a bare filename resolved
+    against ``<jubilee_dir>/gcode_logs/``, or None to use ``latest.gcode``.
+    """
+    if gcode_file and os.path.isfile(gcode_file):
+        fn = gcode_file
+    else:
+        gcode_logs = resolve("jubilee_dir") / "gcode_logs"
+        candidate = gcode_logs / (gcode_file or "latest.gcode")
+        if not candidate.is_file():
+            raise FileNotFoundError(f"gcode file not found at: {candidate}")
+        fn = str(candidate)
     with open(fn, 'r') as f:
         lines = f.readlines()
     path = build_path(lines, distance_per_step)
