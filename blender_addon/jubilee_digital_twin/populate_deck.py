@@ -21,15 +21,34 @@ def _read_paths_cache(twin_root: Path) -> dict:
     return {}
 
 
-def _latest_experiment_dir(interface_dir: str) -> Path | None:
-    exp_root = Path(interface_dir) / "interface_graphique" / "experiment_deck"
-    if not exp_root.is_dir():
-        return None
-    subdirs = sorted(
-        [d for d in exp_root.iterdir() if d.is_dir()],
-        reverse=True,
-    )
-    return subdirs[0] if subdirs else None
+def _latest_experiment_dir(paths: dict) -> Path | None:
+    """Locate the newest ``YYYY-MM-DD_<name>/`` experiment folder.
+
+    Prefers ``experiment_deck_dir`` written by the science-jubilee-interface
+    plugin (post-refactor).  Falls back to the legacy ``interface_dir /
+    interface_graphique / experiment_deck`` layout for older installs.
+    """
+    candidates: list[Path] = []
+    exp_dir = paths.get("experiment_deck_dir")
+    if exp_dir:
+        candidates.append(Path(exp_dir))
+    interface_dir = paths.get("interface_dir")
+    if interface_dir:
+        # Legacy layout — pre-plugin refactor of science-jubilee-interface.
+        candidates.append(Path(interface_dir) / "interface_graphique" / "experiment_deck")
+        # New layout — the interface package writes to <repo_root>/experiment_deck/.
+        candidates.append(Path(interface_dir) / "experiment_deck")
+
+    for root in candidates:
+        if not root.is_dir():
+            continue
+        subdirs = sorted(
+            [d for d in root.iterdir() if d.is_dir()],
+            reverse=True,
+        )
+        if subdirs:
+            return subdirs[0]
+    return None
 
 
 def _remove_collection(name: str) -> None:
@@ -48,17 +67,13 @@ def populate_deck() -> None:
     twin_root = _setup()
     paths = _read_paths_cache(twin_root)
 
-    interface_dir = paths.get("interface_dir")
-    if not interface_dir:
-        raise RuntimeError(
-            "interface_dir not in jubilee_paths.json. Run: jubilee-twin setup-scene"
-        )
-
-    exp_dir = _latest_experiment_dir(interface_dir)
+    exp_dir = _latest_experiment_dir(paths)
     if exp_dir is None:
         raise RuntimeError(
-            f"No experiment folders found under {interface_dir}/interface_graphique/experiment_deck/. "
-            "Generate a 3D export from the interface app first."
+            "No experiment folder found. Register science-jubilee-interface "
+            "(exposes 'experiment_deck_dir' via the 'jubilee.paths' entry point) "
+            "and generate a 3D export from the interface app first. "
+            "If both packages are installed, run: jubilee-twin setup-scene"
         )
 
     deck_blend = exp_dir / "deck.blend"
