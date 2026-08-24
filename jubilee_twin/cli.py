@@ -1,5 +1,4 @@
 import argparse
-import os
 from pathlib import Path
 
 
@@ -23,6 +22,13 @@ def main():
         help="Load tool .blend files and parking posts into the working blend (headless Blender).",
     )
     place_tools.add_argument("--blender", default=None, metavar="EXE")
+
+    # --- place-camera ---
+    place_camera = subparsers.add_parser(
+        "place-camera",
+        help="Create Toolhead_Cam in the working blend using calibration from jubilee_paths.json.",
+    )
+    place_camera.add_argument("--blender", default=None, metavar="EXE")
 
     # --- populate-deck ---
     populate_deck = subparsers.add_parser(
@@ -53,6 +59,15 @@ def main():
     raytrace.add_argument("--step", type=float, default=50.0, metavar="MM")
     raytrace.add_argument("--blender", default=None, metavar="EXE")
 
+    # --- snapshot ---
+    snap = subparsers.add_parser("snapshot", help="Render one frame through Toolhead_Cam at the current or given position.")
+    snap.add_argument("--x", type=float, default=None, metavar="MM")
+    snap.add_argument("--y", type=float, default=None, metavar="MM")
+    snap.add_argument("--z", type=float, default=None, metavar="MM")
+    snap.add_argument("--output", type=Path, default=None, metavar="PATH", help="Output image path (default: Scans/snapshots/<timestamp>.jpg).")
+    snap.add_argument("--pop", action="store_true", help="Show the rendered image with matplotlib after rendering.")
+    snap.add_argument("--blender", default=None, metavar="EXE")
+
     # --- open ---
     open_cmd = subparsers.add_parser("open", help="Open the working blend file (or jubilee_belt.blend) in the Blender GUI.")
     open_cmd.add_argument("--blender", default=None, metavar="EXE")
@@ -68,6 +83,10 @@ def main():
 
     elif args.command == "place-tools":
         rc = driver.place_tools()
+        raise SystemExit(rc)
+
+    elif args.command == "place-camera":
+        rc = driver.place_camera()
         raise SystemExit(rc)
 
     elif args.command == "populate-deck":
@@ -108,6 +127,10 @@ def main():
                     "or pass a gcode file: 'jubilee-twin raytrace <gcode>'"
                 )
         rc = driver.run_raytracing(interactive=args.interactive)
+        raise SystemExit(rc)
+
+    elif args.command == "snapshot":
+        rc = driver.snapshot(x_mm=args.x, y_mm=args.y, z_mm=args.z, output=args.output, pop=args.pop)
         raise SystemExit(rc)
 
     elif args.command == "open":
