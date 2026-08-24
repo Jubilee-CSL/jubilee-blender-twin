@@ -1,5 +1,6 @@
 import os
 import subprocess
+from datetime import datetime
 from pathlib import Path
 
 from jubilee_twin.paths import resolve, twin_dir
@@ -27,11 +28,30 @@ class TwinDriver:
 
         td = twin_dir()
         cache: dict = {"twin_dir": str(td)}
-        for key in ("jubilee_dir", "interface_dir", "experiment_deck_dir"):
+        for key in ("jubilee_dir", "interface_dir", "experiment_deck_dir", "camera_params_yaml"):
             try:
                 cache[key] = str(resolve(key))
             except RuntimeError:
                 pass
+
+        # Inline camera calibration so the Blender addon never has to touch YAML.
+        # Preference: science_jubilee entry point → twin's own defaults/ fallback.
+        fallback_yaml = Path(__file__).parent / "defaults" / "camera_params.yaml"
+        yaml_path = cache.get("camera_params_yaml") or str(fallback_yaml)
+        try:
+            import yaml  # type: ignore
+            with open(yaml_path) as f:
+                data = yaml.safe_load(f) or {}
+            if isinstance(data.get("camera"), dict):
+                cache["camera_params"] = data["camera"]
+                cache["camera_params_source"] = yaml_path
+        except FileNotFoundError:
+            print(f"Warning: camera_params yaml not found at {yaml_path}")
+        except ImportError:
+            print("Warning: PyYAML not installed; skipping camera_params inlining.")
+        except Exception as e:
+            print(f"Warning: failed to load {yaml_path}: {e}")
+
         cache_path = td / "pipeline_data" / "jubilee_paths.json"
         cache_path.parent.mkdir(exist_ok=True)
         cache_path.write_text(json.dumps(cache, indent=2))
@@ -75,6 +95,15 @@ class TwinDriver:
         tool_script = td / "blender_addon" / "jubilee_digital_twin" / "tool_placement.py"
         print("Placing tools (headless Blender)...")
         cmd = [self.blender_exe, str(working), "--background", "--python", str(tool_script)]
+        return subprocess.run(cmd).returncode
+
+    def place_camera(self) -> int:
+        """Create Toolhead_Cam in jubilee_working.blend using current jubilee_paths.json intrinsics."""
+        td = twin_dir()
+        working = self._working_blend()
+        cam_script = td / "blender_addon" / "jubilee_digital_twin" / "place_camera.py"
+        print("Placing camera (headless Blender)...")
+        cmd = [self.blender_exe, str(working), "--background", "--python", str(cam_script)]
         return subprocess.run(cmd).returncode
 
     def populate_deck(self) -> int:
@@ -128,6 +157,46 @@ class TwinDriver:
             cmd.append("--background")
         cmd += ["--python", str(script)]
         return subprocess.run(cmd).returncode
+
+    def snapshot(
+        self,
+        x_mm: float | None = None,
+        y_mm: float | None = None,
+        z_mm: float | None = None,
+        output: Path | None = None,
+        pop: bool = False,
+    ) -> int:
+        """Render one frame through Toolhead_Cam at the current or specified position."""
+        td = twin_dir()
+        blend = self._working_blend()
+        script = td / "blender_addon" / "jubilee_digital_twin" / "snapshot.py"
+
+        # Fix the output path now so we know where to find it for --pop.
+        if output is None and pop:
+            stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output = td / "Scans" / "snapshots" / f"{stamp}_snapshot.jpg"
+
+        cmd = [self.blender_exe, str(blend), "--background", "--python", str(script), "--"]
+        if x_mm is not None:
+            cmd += ["--x", str(x_mm)]
+        if y_mm is not None:
+            cmd += ["--y", str(y_mm)]
+        if z_mm is not None:
+            cmd += ["--z", str(z_mm)]
+        if output is not None:
+            cmd += ["--output", str(output)]
+        rc = subprocess.run(cmd).returncode
+
+        if pop and output is not None and Path(output).is_file():
+            import sys
+            if sys.platform == "win32":
+                os.startfile(str(output))
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(output)])
+            else:
+                subprocess.Popen(["xdg-open", str(output)])
+
+        return rc
 
     def open_interactive(self) -> None:
         """Open the working blend file in the Blender GUI without running any script."""

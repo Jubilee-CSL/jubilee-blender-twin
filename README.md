@@ -14,10 +14,11 @@ A Blender-based *digital twin* of the [Jubilee](https://github.com/machineagency
 4. [The Blender base file](#the-blender-base-file)
 5. [Full pipeline: CLI workflow](#full-pipeline-cli-workflow)
 6. [Full pipeline: Blender addon workflow](#full-pipeline-blender-addon-workflow)
-7. [Connecting the interface app](#connecting-the-interface-app)
-8. [Collision detection](#collision-detection)
-9. [Recording GIFs with Sacred](#recording-gifs-with-sacred)
-10. [Configuration: animation_config.json](#configuration-animation_configjson)
+7. [Virtual image acquisition](#virtual-scanner-subpanel)
+8. [Connecting the interface app](#connecting-the-interface-app)
+9. [Collision detection](#collision-detection)
+10. [Recording GIFs with Sacred](#recording-gifs-with-sacred)
+11. [Configuration: animation_config.json](#configuration-animation_configjson)
 
 ---
 
@@ -65,6 +66,7 @@ Each Jubilee package uses the `jubilee.paths` entry-point group to advertise its
 | `interface_dir` | `science-jubilee-interface/` root | `science-jubilee-interface` |
 | `twin_dir` | `jubilee-blender-twin/` root | `jubilee-blender-twin` |
 | `labware_dir` | labware JSON definitions folder | `jubilee-labware` |
+| `camera_params_yaml` | path to camera calibration YAML | `science_jubilee` |
 
 This means **every package must be installed into the same virtual environment**. If you only cloned the repos without running `pip install -e`, no entry points are registered and the pipeline will fail to locate the other packages.
 
@@ -93,9 +95,13 @@ Example `pipeline_data/jubilee_paths.json` after running `setup-scene`:
 {
   "twin_dir": "C:/Users/you/repos/jubilee-blender-twin",
   "jubilee_dir": "C:/Users/you/repos/science-jubilee",
-  "interface_dir": "C:/Users/you/repos/science-jubilee-interface"
+  "interface_dir": "C:/Users/you/repos/science-jubilee-interface",
+  "camera_params_yaml": "C:/Users/you/repos/science-jubilee/calibration/camera_params.yaml",
+  "camera_params": { "fx": 1467.554, "fy": 1476.769, "cx": 961.213, "cy": 538.565, "dist": [], "offset": [0, 0, 0] }
 }
 ```
+
+The `camera_params` block is inlined from the YAML so the Blender addon never needs to parse YAML itself. If `science_jubilee` does not register `camera_params_yaml`, a bundled fallback (`jubilee_twin/defaults/camera_params.yaml`) is used.
 
 ---
 
@@ -258,7 +264,31 @@ Launches Blender headlessly against `pipeline_data/jubilee_working.blend` and ru
 - Appends each tool `.blend` from `jubilee-blender-twin/Tools/` plus its parking post.
 - Positions them at their parking coordinates and saves the working blend.
 
-#### 2c — `jubilee-twin populate-deck`
+#### 2c — `jubilee-twin place-camera`
+
+```bash
+jubilee-twin place-camera
+```
+
+Mounts `Toolhead_Cam` on the XY carriage in the working blend:
+- Reads intrinsics (`fx`, `fy`, `cx`, `cy`, `offset`) from `pipeline_data/jubilee_paths.json` (written by `setup-scene`). Falls back to `jubilee_twin/defaults/camera_params.yaml` if the entry point is unavailable.
+- Parents the camera to `carriage_Carriage Center Plate` so it follows XY motion automatically.
+- Sets Blender lens / sensor / pixel-aspect / shift to match the pinhole calibration.
+- Saves the blend file.
+
+#### 2d — `jubilee-twin snapshot`
+
+```bash
+# Render the current toolhead position
+jubilee-twin snapshot --pop
+
+# Move to a position then render
+jubilee-twin snapshot --x 150 --y 150 --z 300 --pop
+```
+
+Renders one frame through `Toolhead_Cam` (equivalent to pressing F12 in Blender). `--pop` opens the image with the OS default viewer after rendering. Requires `place-camera` to have been run first.
+
+#### 2e — `jubilee-twin populate-deck`
 
 ```bash
 jubilee-twin populate-deck
@@ -319,10 +349,12 @@ jubilee-twin open
 |---|---|
 | `jubilee-twin setup-scene` | Build working blend (CSV + paths cache + base copy) |
 | `jubilee-twin place-tools` | Load tool models and parking posts into the working blend |
+| `jubilee-twin place-camera` | Mount `Toolhead_Cam` using calibration from `jubilee_paths.json`, save blend |
 | `jubilee-twin populate-deck` | Load labware from the latest interface experiment into the working blend |
 | `jubilee-twin prepare <gcode>` | Generate pipeline CSVs only (no Blender) |
 | `jubilee-twin animate <gcode>` | Full pipeline + Blender animation |
 | `jubilee-twin raytrace [gcode]` | Collision detection (reuses existing CSVs if no gcode given) |
+| `jubilee-twin snapshot [--x MM] [--y MM] [--z MM] [--output PATH] [--pop]` | Render one frame through `Toolhead_Cam`; optionally move axes first |
 | `jubilee-twin open` | Open working blend in Blender GUI |
 
 All commands accept `--blender <path>` to override the executable.
@@ -340,6 +372,9 @@ Open the working blend file with `jubilee-twin open`, then press **N** to open t
 
 **Place Tools** loads all tool `.blend` files (from `Tools/`) and parking posts, positioned from `pipeline_data/tool_data.csv`. Requires `tool_data.csv` — run `jubilee-twin setup-scene` (or `prepare`) first.
 
+**Place Camera** mounts `Toolhead_Cam` on the XY carriage using calibration from `jubilee_paths.json`. Same as `jubilee-twin place-camera`.
+
+**Take Snapshot** renders the current frame through `Toolhead_Cam` and opens the result. An optional `Move to x/y/z` toggle lets you drive the axes to a specific position first. Saves to `Scans/snapshots/`.
 
 **Populate Deck** loads labware from the most recent experiment exported by the interface app. It reads `pipeline_data/jubilee_paths.json` to find the interface directory, picks the newest `experiment_deck/<date>_<name>/` folder, loads `deck.blend`, aligns all labware onto `z_plate_3_V5`, and parents them so they move with the deck during animation.
 
@@ -361,6 +396,34 @@ When a file is selected, clicking Animate:
 If no file is selected, it animates directly from the existing `pathout.csv`.
 
 
+
+### Virtual Scanner subpanel
+
+`View3D → Sidebar → Twin → Digital Twin → Virtual Scanner`
+
+Generates a synthetic image dataset by driving the digital twin over a configurable `(x, y, z)` grid and rendering one JPEG per position. Output format matches the `images_justin/` reference dataset (`img_x{X}_y{Y}_z{Z}.jpg`).
+
+**Requires `Toolhead_Cam` to exist** — click **Place Camera** in the Setup panel first.
+
+| Field | Default (from `images_justin/`) |
+|---|---|
+| X min / max / steps | 110 / 250 / 5 |
+| Y min / max / steps | 80 / 200 / 3 |
+| Z min / max / steps | 280 / 320 / 3 |
+| W × H | 1920 × 1056 |
+
+Click **Reload Defaults** to re-derive the grid from the filenames in `images_justin/`. Click **Run Virtual Scan** to start rendering.
+
+Output is written to:
+```
+Scans/YYYYmmdd_HHMMSS/
+├── img_x110_y80_z280.jpg
+├── ...
+├── camera.yaml     # intrinsics written for reference; distortion not applied in render
+└── manifest.json   # grid config + per-frame evaluated camera world pose
+```
+
+> Camera intrinsics and offset are loaded from calibration and are not editable in the panel.
 
 ### Ray Tracing subpanel
 

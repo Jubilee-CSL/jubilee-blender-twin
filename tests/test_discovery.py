@@ -47,6 +47,66 @@ def test_resolve_raises_without_entry_point():
 
 
 # ---------------------------------------------------------------------------
+# camera_params discovery
+# ---------------------------------------------------------------------------
+
+def test_camera_params_yaml_resolves_via_entry_point():
+    from jubilee_twin.paths import resolve
+    try:
+        p = resolve("camera_params_yaml")
+    except RuntimeError:
+        pytest.skip("jubilee.paths/camera_params_yaml not registered")
+    assert p.is_file(), f"camera_params_yaml entry point points to missing file: {p}"
+
+
+def test_camera_params_yaml_contains_required_keys():
+    from jubilee_twin.paths import resolve
+    import yaml
+    try:
+        p = resolve("camera_params_yaml")
+    except RuntimeError:
+        pytest.skip("jubilee.paths/camera_params_yaml not registered")
+    data = yaml.safe_load(p.read_text())
+    cam = data.get("camera", {})
+    for key in ("fx", "fy", "cx", "cy", "dist", "offset"):
+        assert key in cam, f"camera_params.yaml missing key: {key!r}"
+
+
+def test_write_paths_cache_inlines_camera_params(tmp_path, monkeypatch):
+    """_write_paths_cache must embed camera_params into jubilee_paths.json."""
+    import json
+    from jubilee_twin.paths import resolve
+    from jubilee_twin.driver import TwinDriver
+
+    try:
+        resolve("camera_params_yaml")
+    except RuntimeError:
+        pytest.skip("jubilee.paths/camera_params_yaml not registered")
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "pipeline_data").mkdir()
+
+    import jubilee_twin.driver as drv
+    monkeypatch.setattr(drv, "twin_dir", lambda: tmp_path)
+
+    d = TwinDriver(blender_exe="blender")
+    d._write_paths_cache()
+
+    cache = json.loads((tmp_path / "pipeline_data" / "jubilee_paths.json").read_text())
+    assert "camera_params" in cache, "camera_params not inlined into jubilee_paths.json"
+    for key in ("fx", "fy", "cx", "cy"):
+        assert key in cache["camera_params"], f"camera_params missing {key!r}"
+
+
+def test_resolve_raises_without_entry_point():
+    from jubilee_twin.paths import resolve
+
+    with patch("importlib.metadata.entry_points", return_value=[]):
+        with pytest.raises(RuntimeError, match="jubilee.paths/jubilee_dir entry point not found"):
+            resolve("jubilee_dir")
+
+
+# ---------------------------------------------------------------------------
 # tool_id discovery
 # ---------------------------------------------------------------------------
 
