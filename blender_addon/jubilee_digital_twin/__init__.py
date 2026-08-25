@@ -201,6 +201,38 @@ class ANIM_OT_toggle_hulls(Operator):
         return {'FINISHED'}
 
 
+# ── Import .blend file operator ─────────────────────────────────────────
+class IMPORT_OT_blend_file(Operator):
+    bl_idname = "import.blend_file"
+    bl_label = "Import .blend File"
+    bl_description = "Append all objects from a .blend file into the current scene"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    filepath: StringProperty(subtype='FILE_PATH')
+    filter_glob: StringProperty(default="*.blend", options={'HIDDEN'})
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+        if not self.filepath.lower().endswith(".blend"):
+            self.report({'ERROR'}, "Please select a .blend file")
+            return {'CANCELLED'}
+        if not os.path.isfile(self.filepath):
+            self.report({'ERROR'}, f"File not found: {self.filepath}")
+            return {'CANCELLED'}
+        with bpy.data.libraries.load(self.filepath, link=False) as (data_from, data_to):
+            data_to.objects = list(data_from.objects)
+        linked = []
+        for obj in data_to.objects:
+            if obj is not None:
+                bpy.context.scene.collection.objects.link(obj)
+                linked.append(obj)
+        self.report({'INFO'}, f"Imported {len(linked)} object(s) from {os.path.basename(self.filepath)}")
+        return {'FINISHED'}
+
+
 # ── Virtual scanner operators ────────────────────────────────────────────
 class SCAN_OT_reload_defaults(Operator):
     bl_idname = "scan.reload_defaults"
@@ -294,6 +326,19 @@ class ANIM_PT_digital_twin(Panel):
     bl_category = "Twin"
 
     def draw(self, context):
+        pass
+
+
+class ANIM_PT_snapshot(Panel):
+    bl_label = "Snapshot"
+    bl_idname = "ANIM_PT_snapshot"
+    bl_parent_id = "ANIM_PT_digital_twin"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Twin"
+    bl_order = 0
+
+    def draw(self, context):
         layout = self.layout
         scene = context.scene
         row = layout.row(align=True)
@@ -313,7 +358,7 @@ class ANIM_PT_animate(Panel):
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "Twin"
-    bl_order = 0
+    bl_order = 1
 
     def draw(self, context):
         layout = self.layout
@@ -348,6 +393,8 @@ class ANIM_PT_setup(Panel):
         layout.operator("anim.place_tools", icon='TOOL_SETTINGS')
         layout.operator("anim.place_camera", icon='OUTLINER_OB_CAMERA')
         layout.operator("anim.populate_deck", icon='OUTLINER_OB_SURFACE')
+        layout.separator()
+        layout.operator("import.blend_file", icon='APPEND_BLEND')
 
 
 # ── Ray tracing subpanel ──────────────────────────────────────────────────
@@ -451,6 +498,7 @@ classes = [
     CollisionEvent,
     COLLISION_UL_list,
     COLLISION_OT_goto_frame,
+    IMPORT_OT_blend_file,
     ANIM_OT_place_tools,
     ANIM_OT_place_camera,
     ANIM_OT_populate_deck,
@@ -463,6 +511,7 @@ classes = [
     SCAN_OT_run,
     ANIM_PT_digital_twin,
     ANIM_PT_setup,
+    ANIM_PT_snapshot,
     ANIM_PT_animate,
     ANIM_PT_raytracing,
     ANIM_PT_scanner,
