@@ -17,10 +17,12 @@ import numpy as np
 
 
 def _setup_paths():
-    """Compute twin_root and CSV paths from the currently open .blend file."""
-    twin_root = os.path.dirname(os.path.dirname(bpy.data.filepath))
-    if twin_root not in sys.path:
-        sys.path.insert(0, twin_root)
+    """Return CSV paths for the current .blend file."""
+    addon_dir = os.path.dirname(os.path.abspath(__file__))
+    if addon_dir not in sys.path:
+        sys.path.insert(0, addon_dir)
+    import scene_utils
+    scene_utils.ensure_pipeline_on_path()
     csv_path = bpy.path.abspath("//../pipeline_data/pathout.csv")
     tool_data_path = bpy.path.abspath("//../pipeline_data/tool_data.csv")
     return csv_path, tool_data_path
@@ -48,10 +50,67 @@ def identify_tool(tool_id, tool_data_path):
     return None
 
 
+def apply_machine_state(positions: dict, active_tool_idx) -> None:
+    """Position axes and mount the active tool without inserting keyframes."""
+    _, tool_data_path = _setup_paths()
+    from jubilee_twin.pipeline.utils import get_axis_max
+
+    x_axis = bpy.data.objects.get("X-axis")
+    y_axis = bpy.data.objects.get("Y-axis")
+    z_axis = bpy.data.objects.get("Z-axis")
+    if x_axis is None or y_axis is None:
+        raise RuntimeError("X-axis or Y-axis not found — run Place Tools first")
+
+    x_max = get_axis_max(x_axis, 'X')
+    y_max = get_axis_max(y_axis, 'Y')
+    z_max = get_axis_max(z_axis, 'Z') if z_axis is not None else 0.0
+
+    x = float(positions.get("X", 0.0))
+    y = float(positions.get("Y", 0.0))
+    z = float(positions.get("Z", 0.0))
+
+    active_idx = int(active_tool_idx) if active_tool_idx is not None else -1
+    if active_idx >= 0:
+        x, y, z = apply_offset(x, y, z, float(active_idx), tool_data_path)
+
+    x_axis.location.x = x_max - x / 1000
+    y_axis.location.y = y_max - y / 1000
+    if z_axis is not None:
+        z_axis.location.z = z_max - z / 1000
+
+    gantry = bpy.data.collections.get("gantry")
+    if not gantry or not gantry.objects:
+        return
+
+    bpy.context.view_layer.update()
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    gantry_anchor = gantry.objects[0]
+    gantry_world = gantry_anchor.evaluated_get(depsgraph).matrix_world.copy()
+
+    active_name = identify_tool(float(active_idx), tool_data_path) if active_idx >= 0 else None
+
+    tools_col = bpy.data.collections.get("Tools")
+    if tools_col:
+        for tool_col in tools_col.children:
+            is_active = tool_col.name == active_name
+            for obj in tool_col.objects:
+                for c in [c for c in obj.constraints if c.type == 'CHILD_OF']:
+                    obj.constraints.remove(c)
+                if is_active:
+                    c = obj.constraints.new('CHILD_OF')
+                    c.target = gantry_anchor
+                    c.inverse_matrix = gantry_world.inverted()
+                    c.influence = 1.0
+
+
 def run_animation():
     """Read pipeline_data/ CSVs and bake keyframes into the open .blend scene."""
     csv_path, tool_data_path = _setup_paths()
     from jubilee_twin.pipeline.utils import get_axis_min, get_axis_max
+    addon_dir = os.path.dirname(os.path.abspath(__file__))
+    if addon_dir not in sys.path:
+        sys.path.insert(0, addon_dir)
+    import scene_utils
 
     gantry = bpy.data.collections["gantry"]
 
@@ -76,17 +135,9 @@ def run_animation():
 
     x_min = get_axis_min(x_axis, 'X')
     y_min = get_axis_min(y_axis, 'Y')
-    x_max = get_axis_max(x_axis, 'X')
-    y_max = get_axis_max(y_axis, 'Y')
-    z_max = get_axis_max(z_axis, 'Z') if z_axis is not None else 0.0
-
-    x_axis.location.x = x_max
-    y_axis.location.y = y_max
-    if z_axis is not None:
-        z_axis.location.z = z_max
-
-    print(f"Axis maxes: X={x_max}, Y={y_max}, Z={z_max}")
     print(f"Axis mins: X={x_min}, Y={y_min}")
+
+    scene_utils.drive_to_mm(0.0, 0.0, 0.0)  # park at home before keying
 
     # Pass 1: insert position keyframes
     tool_flag = False
@@ -99,13 +150,7 @@ def run_animation():
         if float(tool_id) != -1.0 and tool_flag is not None:
             x, y, z = apply_offset(x, y, z, float(tool_id), tool_data_path)
 
-        x_axis.location.x = (x_max - x / 1000)
-        x_axis.keyframe_insert(data_path="location", frame=frame)
-        y_axis.location.y = (y_max - y / 1000)
-        y_axis.keyframe_insert(data_path="location", frame=frame)
-        if z_axis is not None:
-            z_axis.location.z = z_max - z / 1000
-            z_axis.keyframe_insert(data_path="location", frame=frame)
+        scene_utils.drive_to_mm(x, y, z, frame=frame)
 
     # Pass 2: handle toolchanges now that all keyframes exist
     tool_flag = False

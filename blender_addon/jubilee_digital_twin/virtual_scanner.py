@@ -57,25 +57,20 @@ def _load_camera_params() -> dict:
 # ── Small utilities ────────────────────────────────────────────────────────
 
 def _twin_root() -> Path:
-    """Repository root, computed from the currently open .blend file."""
-    return Path(os.path.dirname(os.path.dirname(bpy.data.filepath)))
+    from . import scene_utils
+    return scene_utils.twin_root()
 
 
 def _ensure_pipeline_on_path() -> None:
-    root = _twin_root()
-    if str(root) not in sys.path:
-        sys.path.insert(0, str(root))
+    from . import scene_utils
+    scene_utils.ensure_pipeline_on_path()
 
 
 def _drive_to_mm(x_mm: float, y_mm: float, z_mm: float) -> None:
-    """Move the X/Y/Z axis objects to the given machine position (mm)."""
+    """Thin wrapper kept for callers that import this name directly."""
     _ensure_pipeline_on_path()
-    from jubilee_twin.pipeline.utils import get_axis_max  # type: ignore
-    x_axis, y_axis, z_axis = _get_axis_objects()
-    x_axis.location.x = get_axis_max(x_axis, 'X') - x_mm / 1000.0
-    y_axis.location.y = get_axis_max(y_axis, 'Y') - y_mm / 1000.0
-    z_axis.location.z = get_axis_max(z_axis, 'Z') - z_mm / 1000.0
-    bpy.context.view_layer.update()
+    from . import scene_utils
+    scene_utils.drive_to_mm(x_mm, y_mm, z_mm)
 
 
 def _infer_range(values: list[int]) -> tuple[float, float, int]:

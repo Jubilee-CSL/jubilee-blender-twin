@@ -1,11 +1,29 @@
 import bpy
 import sys
 import os
+import logging
 from bpy.props import (
     StringProperty, IntProperty, FloatProperty, FloatVectorProperty,
     CollectionProperty, BoolProperty, EnumProperty,
 )
 from bpy.types import PropertyGroup, UIList, Operator, Panel
+
+
+# ── Blender log handler — buffers jubilee_twin log events for panel display ──
+_LOG_BUFFER: list[tuple[int, str]] = []  # (levelno, message)
+_LOG_BUFFER_MAX = 12
+
+
+class _BlenderPanelHandler(logging.Handler):
+    """Captures jubilee_twin log records into _LOG_BUFFER."""
+    def emit(self, record: logging.LogRecord) -> None:
+        global _LOG_BUFFER
+        _LOG_BUFFER.append((record.levelno, self.format(record)))
+        if len(_LOG_BUFFER) > _LOG_BUFFER_MAX:
+            _LOG_BUFFER.pop(0)
+
+
+_panel_handler: _BlenderPanelHandler | None = None
 
 bl_info = {
     "name": "Digital Twin",
@@ -99,19 +117,57 @@ class ANIM_OT_animate(Operator):
         return {'FINISHED'}
 
 
-# ── Place tools operator ──────────────────────────────────────────────────
-class ANIM_OT_place_tools(Operator):
-    bl_idname = "anim.place_tools"
-    bl_label = "Place Tools"
+# ── Copy machine state operator ──────────────────────────────────────────
+class SETUP_OT_copy_machine_state(Operator):
+    bl_idname = "setup.copy_machine_state"
+    bl_label = "Copy Machine State"
     bl_description = (
-        "Load tool .blend files and parking posts into the scene.\n"
-        "Requires pipeline_data/tool_data.csv — run 'jubilee-twin setup-scene' first."
+        "Fetch live state from Duet (.env.hardware), update tool_data.csv / "
+        "machine_status.json, and reposition the gantry axes in the open scene."
     )
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        from . import tool_placement as tp
-        tp.place_tools()
+        twin_root = os.path.dirname(os.path.dirname(bpy.data.filepath))
+        if twin_root not in sys.path:
+            sys.path.insert(0, twin_root)
+        import json
+        from jubilee_twin.pipeline import tool_id
+        from jubilee_twin.paths import twin_dir
+        pipeline_data_dir = str(twin_dir() / "pipeline_data")
+        tool_id.run(output_dir=pipeline_data_dir)
+        status_path = os.path.join(pipeline_data_dir, "machine_status.json")
+        try:
+            with open(status_path) as f:
+                pos = json.load(f).get("head_position", {})
+            from . import scene_utils
+            scene_utils.drive_to_mm(pos.get("X", 0.0), pos.get("Y", 0.0), pos.get("Z", 0.0))
+        except Exception as e:
+            self.report({'WARNING'}, f"Could not apply position: {e}")
+            return {'FINISHED'}
+        self.report({'INFO'}, "Machine state copied")
+        return {'FINISHED'}
+
+
+# ── Move to position operator ─────────────────────────────────────────────
+class SETUP_OT_move_to_position(Operator):
+    bl_idname = "setup.move_to_position"
+    bl_label = "Move to Position"
+    bl_description = "Move toolhead axes (X/Y/Z) and deck to the given machine coordinates (mm)."
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        twin_root = os.path.dirname(os.path.dirname(bpy.data.filepath))
+        if twin_root not in sys.path:
+            sys.path.insert(0, twin_root)
+        from . import scene_utils
+        scene = context.scene
+        try:
+            scene_utils.drive_to_mm(scene.move_x, scene.move_y, scene.move_z)
+        except Exception as e:
+            self.report({'ERROR'}, str(e))
+            return {'CANCELLED'}
+        self.report({'INFO'}, f"Moved to X={scene.move_x} Y={scene.move_y} Z={scene.move_z}")
         return {'FINISHED'}
 
 
@@ -268,20 +324,12 @@ class SCAN_OT_snapshot(Operator):
 
     def execute(self, context):
         from . import snapshot as sn
-        from . import virtual_scanner as vs
-        scene = context.scene
-        if scene.snap_use_pos:
-            try:
-                vs._drive_to_mm(scene.snap_x, scene.snap_y, scene.snap_z)
-            except Exception as e:
-                self.report({'ERROR'}, str(e))
-                return {'CANCELLED'}
         try:
             out = sn.take_snapshot()
         except Exception as e:
             self.report({'ERROR'}, str(e))
             return {'CANCELLED'}
-        scene.scan_last_output = str(out)
+        context.scene.scan_last_output = str(out)
         self.report({'INFO'}, f"Snapshot: {out.name}")
         bpy.ops.render.view_show('INVOKE_DEFAULT')
         return {'FINISHED'}
@@ -329,28 +377,6 @@ class ANIM_PT_digital_twin(Panel):
         pass
 
 
-class ANIM_PT_snapshot(Panel):
-    bl_label = "Snapshot"
-    bl_idname = "ANIM_PT_snapshot"
-    bl_parent_id = "ANIM_PT_digital_twin"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "Twin"
-    bl_order = 0
-
-    def draw(self, context):
-        layout = self.layout
-        scene = context.scene
-        row = layout.row(align=True)
-        row.prop(scene, "snap_use_pos", text="Move to")
-        sub = row.row(align=True)
-        sub.enabled = scene.snap_use_pos
-        sub.prop(scene, "snap_x", text="x")
-        sub.prop(scene, "snap_y", text="y")
-        sub.prop(scene, "snap_z", text="z")
-        layout.operator("scan.snapshot", icon='CAMERA_DATA')
-
-
 class ANIM_PT_animate(Panel):
     bl_label = "Animation"
     bl_idname = "ANIM_PT_animate"
@@ -390,11 +416,32 @@ class ANIM_PT_setup(Panel):
             col.label(text="Run 'jubilee-twin setup-scene' first", icon='ERROR')
             layout.separator()
 
-        layout.operator("anim.place_tools", icon='TOOL_SETTINGS')
-        layout.operator("anim.place_camera", icon='OUTLINER_OB_CAMERA')
+        layout.operator("setup.copy_machine_state", icon='FILE_REFRESH')
+        layout.separator()
         layout.operator("anim.populate_deck", icon='OUTLINER_OB_SURFACE')
         layout.separator()
+
+        box = layout.box()
+        box.label(text="Move to Position (mm)")
+        row = box.row(align=True)
+        row.prop(context.scene, "move_x", text="X")
+        row.prop(context.scene, "move_y", text="Y")
+        row.prop(context.scene, "move_z", text="Z")
+        row = box.row(align=True)
+        row.operator("setup.move_to_position", icon='DRIVER_TRANSFORM')
+        row.operator("scan.snapshot", icon='CAMERA_DATA')
+
+        layout.separator()
         layout.operator("import.blend_file", icon='APPEND_BLEND')
+
+        if _LOG_BUFFER:
+            layout.separator()
+            box = layout.box()
+            box.label(text="Recent events", icon='INFO')
+            col = box.column(align=True)
+            for lvl, msg in _LOG_BUFFER[-5:]:
+                icon = 'ERROR' if lvl >= logging.WARNING else 'CHECKMARK'
+                col.label(text=msg, icon=icon)
 
 
 # ── Ray tracing subpanel ──────────────────────────────────────────────────
@@ -499,7 +546,8 @@ classes = [
     COLLISION_UL_list,
     COLLISION_OT_goto_frame,
     IMPORT_OT_blend_file,
-    ANIM_OT_place_tools,
+    SETUP_OT_copy_machine_state,
+    SETUP_OT_move_to_position,
     ANIM_OT_place_camera,
     ANIM_OT_populate_deck,
     ANIM_OT_animate,
@@ -511,7 +559,6 @@ classes = [
     SCAN_OT_run,
     ANIM_PT_digital_twin,
     ANIM_PT_setup,
-    ANIM_PT_snapshot,
     ANIM_PT_animate,
     ANIM_PT_raytracing,
     ANIM_PT_scanner,
@@ -531,6 +578,12 @@ def register():
         description="GCode file from science_jubilee/gcode_logs/ to animate",
         items=_gcode_enum_items,
     )
+
+    global _panel_handler
+    _panel_handler = _BlenderPanelHandler()
+    _panel_handler.setFormatter(logging.Formatter("%(name)s: %(message)s"))
+    logging.getLogger("jubilee_twin").addHandler(_panel_handler)
+    logging.getLogger("jubilee_twin").setLevel(logging.INFO)
 
     # ── Virtual scanner properties — defaults from bundled fallback yaml only. ──
     # bpy.data is restricted at register time so we never touch bpy.data.filepath here.
@@ -563,13 +616,16 @@ def register():
     )
     bpy.types.Scene.scan_last_output = StringProperty(name="Last scan output", default="")
 
-    bpy.types.Scene.snap_use_pos = BoolProperty(name="Move to position before snapshot", default=False)
-    bpy.types.Scene.snap_x = FloatProperty(name="x (mm)", default=180.0, min=0.0, soft_max=300.0)
-    bpy.types.Scene.snap_y = FloatProperty(name="y (mm)", default=140.0, min=0.0, soft_max=300.0)
-    bpy.types.Scene.snap_z = FloatProperty(name="z (mm)", default=300.0, min=0.0, soft_max=400.0)
+    bpy.types.Scene.move_x = FloatProperty(name="X (mm)", default=0.0, min=0.0, soft_max=300.0)
+    bpy.types.Scene.move_y = FloatProperty(name="Y (mm)", default=0.0, min=0.0, soft_max=300.0)
+    bpy.types.Scene.move_z = FloatProperty(name="Z (mm)", default=0.0, min=0.0, soft_max=400.0)
 
 
 def unregister():
+    global _panel_handler
+    if _panel_handler is not None:
+        logging.getLogger("jubilee_twin").removeHandler(_panel_handler)
+        _panel_handler = None
     for attr in ("collision_list", "collision_list_index", "show_rays", "show_hulls",
                  "jubilee_gcode_file",
                  "scan_x_min", "scan_x_max", "scan_x_steps",
@@ -578,7 +634,7 @@ def unregister():
                  "scan_image_width", "scan_image_height",
                  "scan_fx", "scan_fy", "scan_cx", "scan_cy",
                  "scan_camera_offset", "scan_last_output",
-                 "snap_use_pos", "snap_x", "snap_y", "snap_z"):
+                 "move_x", "move_y", "move_z"):
         if hasattr(bpy.types.Scene, attr):
             delattr(bpy.types.Scene, attr)
     for cls in reversed(classes):

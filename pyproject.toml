@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "jubilee-twin"
 version = "0.1.0"
 requires-python = ">=3.10"
-dependencies = ["numpy", "pyyaml"]
+dependencies = ["numpy", "pyyaml", "colorlog"]
 
 [project.scripts]
 jubilee-twin = "jubilee_twin.cli:main"
@@ -22,7 +22,8 @@ where = ["."]
 include = ["jubilee_twin*"]
 
 [tool.setuptools.package-data]
-jubilee_twin = ["defaults/*.yaml"]
+jubilee_twin = ["defaults/*.yaml", "defaults/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-v -s --tb=short"

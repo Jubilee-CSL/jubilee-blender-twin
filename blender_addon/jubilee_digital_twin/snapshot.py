@@ -12,7 +12,11 @@ import bpy
 
 
 def _twin_root() -> Path:
-    return Path(os.path.dirname(os.path.dirname(bpy.data.filepath)))
+    addon_dir = str(Path(__file__).parent)
+    if addon_dir not in sys.path:
+        sys.path.insert(0, addon_dir)
+    import scene_utils
+    return scene_utils.twin_root()
 
 
 def _get_camera() -> bpy.types.Object:
