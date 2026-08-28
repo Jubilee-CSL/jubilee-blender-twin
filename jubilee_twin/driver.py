@@ -4,6 +4,9 @@ from datetime import datetime
 from pathlib import Path
 
 from jubilee_twin.paths import resolve, twin_dir
+from jubilee_twin.log import get_logger
+
+log = get_logger(__name__)
 
 
 class TwinDriver:
@@ -34,6 +37,12 @@ class TwinDriver:
             except RuntimeError:
                 pass
 
+        # Expose .env.hardware path so the Blender addon can reach the live machine.
+        if "jubilee_dir" in cache:
+            env_hw = Path(cache["jubilee_dir"]) / ".env.hardware"
+            if env_hw.is_file():
+                cache["env_hardware"] = str(env_hw)
+
         # Inline camera calibration so the Blender addon never has to touch YAML.
         # Preference: science_jubilee entry point → twin's own defaults/ fallback.
         fallback_yaml = Path(__file__).parent / "defaults" / "camera_params.yaml"
@@ -46,15 +55,16 @@ class TwinDriver:
                 cache["camera_params"] = data["camera"]
                 cache["camera_params_source"] = yaml_path
         except FileNotFoundError:
-            print(f"Warning: camera_params yaml not found at {yaml_path}")
+            log.warning("camera_params yaml not found: %s", yaml_path)
         except ImportError:
-            print("Warning: PyYAML not installed; skipping camera_params inlining.")
+            log.warning("PyYAML not installed; skipping camera_params inlining")
         except Exception as e:
-            print(f"Warning: failed to load {yaml_path}: {e}")
+            log.warning("Failed to load %s: %s", yaml_path, e)
 
         cache_path = td / "pipeline_data" / "jubilee_paths.json"
         cache_path.parent.mkdir(exist_ok=True)
         cache_path.write_text(json.dumps(cache, indent=2))
+        log.warning("paths cache  → %s", cache_path)
 
     def _working_blend(self) -> Path:
         """Return the working blend file; fall back to jubilee_belt.blend if setup-scene hasn't run."""
@@ -63,11 +73,7 @@ class TwinDriver:
         return working if working.exists() else td / "blender_models" / "jubilee_belt.blend"
 
     def setup_scene(self) -> int:
-        """Write tool_data.csv + jubilee_paths.json and copy jubilee_base.blend → jubilee_working.blend.
-
-        Does NOT place tools in Blender. Run 'jubilee-twin place-tools' (or use the
-        addon 'Place Tools' button) as a separate step after this.
-        """
+        """Full one-shot setup: query machine state, write CSVs, build working.blend with tools/camera/deck."""
         from jubilee_twin.pipeline import tool_id
         import shutil
 
@@ -75,17 +81,30 @@ class TwinDriver:
         pipeline_data_dir = td / "pipeline_data"
         pipeline_data_dir.mkdir(exist_ok=True)
 
+        log.info("Step 1/3: querying machine state and writing CSVs")
         self._write_paths_cache()
         tool_id.run(output_dir=str(pipeline_data_dir))
 
         base = td / "blender_models" / "jubilee_base.blend"
         if not base.exists():
             raise FileNotFoundError(f"jubilee_base.blend not found at {base}")
-
         working = pipeline_data_dir / "jubilee_working.blend"
-        print(f"Copying {base.name} -> {working} ...")
+        log.warning("base blend   → %s", working)
         shutil.copy2(base, working)
-        print("Done. Run 'jubilee-twin place-tools' to load tool models into the scene.")
+
+        log.info("Step 2/3: placing tools at live park positions")
+        rc = self.place_tools()
+        if rc != 0:
+            return rc
+
+        log.info("Step 3/3: placing camera")
+        rc = self.place_camera()
+        if rc != 0:
+            return rc
+
+        log.info("Done — open pipeline_data/jubilee_working.blend")
+        log.info("Next: jubilee-twin animate <gcode>  or  jubilee-twin snapshot")
+        log.info("Deck: use 'Populate Deck' in the addon after opening the blend")
         return 0
 
     def place_tools(self) -> int:
@@ -93,7 +112,8 @@ class TwinDriver:
         td = twin_dir()
         working = self._working_blend()
         tool_script = td / "blender_addon" / "jubilee_digital_twin" / "tool_placement.py"
-        print("Placing tools (headless Blender)...")
+        log.info("Placing tools (headless Blender)")
+        log.warning("tool script  → %s", tool_script)
         cmd = [self.blender_exe, str(working), "--background", "--python", str(tool_script)]
         return subprocess.run(cmd).returncode
 
@@ -102,7 +122,8 @@ class TwinDriver:
         td = twin_dir()
         working = self._working_blend()
         cam_script = td / "blender_addon" / "jubilee_digital_twin" / "place_camera.py"
-        print("Placing camera (headless Blender)...")
+        log.info("Placing camera (headless Blender)")
+        log.warning("cam script   → %s", cam_script)
         cmd = [self.blender_exe, str(working), "--background", "--python", str(cam_script)]
         return subprocess.run(cmd).returncode
 
@@ -113,7 +134,8 @@ class TwinDriver:
         deck_script = td / "blender_addon" / "jubilee_digital_twin" / "populate_deck.py"
         # Refresh paths cache so the script can find interface_dir even if setup-scene wasn't re-run.
         self._write_paths_cache()
-        print("Populating deck (headless Blender)...")
+        log.info("Populating deck (headless Blender)")
+        log.warning("deck script  → %s", deck_script)
         cmd = [self.blender_exe, str(working), "--background", "--python", str(deck_script)]
         return subprocess.run(cmd).returncode
 
@@ -139,17 +161,17 @@ class TwinDriver:
         pipeline_data_dir = str(td / "pipeline_data")
         self._write_paths_cache()
 
-        print("Step 1/3: extracting tool data...")
+        log.info("Step 1/3: extracting tool data")
         tool_id.run(output_dir=pipeline_data_dir)
 
-        print("Step 2/3: parsing gcode...")
+        log.info("Step 2/3: parsing gcode")
         path_follower.run(
             gcode_file=str(gcode_file),
             distance_per_step=distance_per_step,
             output_dir=pipeline_data_dir,
         )
 
-        print("Step 3/3: launching Blender...")
+        log.info("Step 3/3: launching Blender")
         blend = self._working_blend()
         script = td / "blender_addon" / "jubilee_digital_twin" / "animate_path.py"
         cmd = [self.blender_exe, str(blend)]

@@ -1,24 +1,34 @@
 import sys
 import os
 import json
+import logging
 import bpy
 from pathlib import Path
 
+# get_logger is imported lazily (jubilee_twin not on sys.path at Blender addon load time)
+logger = logging.getLogger("jubilee_twin.populate_deck")
+
+
+def _ensure_colorlog() -> None:
+    try:
+        from jubilee_twin.log import get_logger as _gl  # triggers colorlog setup
+        _gl("jubilee_twin.populate_deck")
+    except Exception:
+        pass
+
 
 def _setup() -> Path:
-    # blender_models/ (or pipeline_data/) is one level below twin root
-    twin_root = Path(os.path.dirname(os.path.dirname(bpy.data.filepath)))
-    if str(twin_root) not in sys.path:
-        sys.path.insert(0, str(twin_root))
-    return twin_root
+    addon_dir = str(Path(__file__).parent)
+    if addon_dir not in sys.path:
+        sys.path.insert(0, addon_dir)
+    import scene_utils
+    scene_utils.ensure_pipeline_on_path()
+    return scene_utils.twin_root()
 
 
 def _read_paths_cache(twin_root: Path) -> dict:
-    cache_path = twin_root / "pipeline_data" / "jubilee_paths.json"
-    if cache_path.is_file():
-        with open(cache_path) as f:
-            return json.load(f)
-    return {}
+    import scene_utils
+    return scene_utils.read_paths_cache()
 
 
 def _latest_experiment_dir(paths: dict) -> Path | None:
@@ -64,6 +74,7 @@ def _remove_collection(name: str) -> None:
 
 
 def populate_deck() -> None:
+    _ensure_colorlog()
     twin_root = _setup()
     paths = _read_paths_cache(twin_root)
 
@@ -76,6 +87,7 @@ def populate_deck() -> None:
             "If both packages are installed, run: jubilee-twin setup-scene"
         )
 
+    logger.warning("deck.blend   → %s", exp_dir / "deck.blend")
     deck_blend = exp_dir / "deck.blend"
     if not deck_blend.exists():
         raise RuntimeError(
@@ -88,7 +100,7 @@ def populate_deck() -> None:
     if z_plate is None:
         raise RuntimeError("Object 'z_plate_3_V5' not found in scene.")
 
-    print(f"[populate_deck] Loading from: {exp_dir.name}")
+    logger.info("Loading deck from: %s", exp_dir.name)
     _remove_collection("Deck")
     deck_col = bpy.data.collections.new("Deck")
     bpy.context.scene.collection.children.link(deck_col)
@@ -136,7 +148,7 @@ def populate_deck() -> None:
         obj.matrix_parent_inverse = z_plate.matrix_world.inverted()
         deck_col.objects.link(obj)
 
-    print(f"[populate_deck] {len(labware_objs)} labware placed on {z_plate.name}.")
+    logger.info("%d labware placed on %s", len(labware_objs), z_plate.name)
 
 
 def main():

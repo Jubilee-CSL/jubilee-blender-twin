@@ -4,7 +4,6 @@ from mathutils import Vector
 import bmesh
 from dataclasses import dataclass,field
 from enum import Enum, auto
-import blender_plots as bplt
 import csv
 
 gantry = bpy.data.collections["gantry"]
@@ -374,6 +373,7 @@ def _trace_ray_traj(frame_num,origins,directions,frame):
 
     colors = [c for c in np.linspace((0, 0, 1), (1, 0, 0), num=frame_num, dtype=float)]
 
+    import blender_plots as bplt  # optional; not in Blender's bundled Python
     arrows = bplt.Arrows(origins,
                 np.tile(directions[frame-2], (len(origins), 1)),
                 color=colors[frame-1],

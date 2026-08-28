@@ -1,18 +1,29 @@
 import sys
 import os
+import logging
 import bpy
 import csv
-import numpy as np
 import mathutils
 from pathlib import Path
 
+logger = logging.getLogger("jubilee_twin.tool_placement")
+
+
+def _ensure_colorlog() -> None:
+    try:
+        from jubilee_twin.log import get_logger as _gl
+        _gl("jubilee_twin.tool_placement")
+    except Exception:
+        pass
+
 
 def _setup():
-    # blender_models/ is one level below twin root → dirname twice
-    twin_root = Path(os.path.dirname(os.path.dirname(bpy.data.filepath)))
-    if str(twin_root) not in sys.path:
-        sys.path.insert(0, str(twin_root))
-    return twin_root
+    addon_dir = str(Path(__file__).parent)
+    if addon_dir not in sys.path:
+        sys.path.insert(0, addon_dir)
+    import scene_utils
+    scene_utils.ensure_pipeline_on_path()
+    return scene_utils.twin_root()
 
 
 def get_or_create_collection(name):
@@ -52,9 +63,28 @@ def move_to_pos(tool_name,x_pos,y_pos):
         
 
 def place_tools():
+    _ensure_colorlog()
     twin_root = _setup()
-    from jubilee_twin.pipeline.utils import get_axis_min, get_axis_max
+    logger.info("Placing tools from tool_data.csv")
 
+    # Use live head position from machine_status.json if available; else park at home.
+    import json as _json
+    status_path = twin_root / "pipeline_data" / "machine_status.json"
+    try:
+        with open(status_path) as _f:
+            _status = _json.load(_f)
+        _pos = _status.get("head_position", {})
+        _src = _status.get("source", "machine_status.json")
+        x_mm = _pos.get("X", 0.0)
+        y_mm = _pos.get("Y", 0.0)
+        z_mm = _pos.get("Z", 0.0)
+        scene_utils.drive_to_mm(x_mm, y_mm, z_mm)
+        logger.warning("Head position from %s: X=%.1f Y=%.1f Z=%.1f", _src, x_mm, y_mm, z_mm)
+    except Exception:
+        scene_utils.drive_to_mm(0.0, 0.0, 0.0)
+        logger.warning("No machine_status.json — gantry parked at home")
+
+    from jubilee_twin.pipeline.utils import get_axis_max
     x_axis = bpy.data.objects.get("X-axis")
     y_axis = bpy.data.objects.get("Y-axis")
     if x_axis is None:
@@ -62,11 +92,10 @@ def place_tools():
     if y_axis is None:
         raise Exception("No object named 'Y-axis' in the scene!")
 
-    x_axis.location.x = get_axis_max(x_axis, 'X')
-    y_axis.location.y = get_axis_max(y_axis, 'Y')
-
     blend_dir = twin_root / "Tools"
     data_csv = twin_root / "pipeline_data" / "tool_data.csv"
+    logger.warning("tool_data.csv ← %s", data_csv)
+    logger.warning("tool blends   ← %s", blend_dir)
 
     # Get or create target parent collections
     tools_col    = get_or_create_collection("Tools")
@@ -86,12 +115,16 @@ def place_tools():
                 remove_collection(tool_name)
                 remove_collection(park_name)
 
+                logger.warning("Tool %s (%s)  ← %s", tool_id, tool_name, blend_file)
+                logger.info(  "  park   X=%.1f  Y=%.1f  Z=%.1f", float(row[2]), float(row[3]), float(row[4]))
+                logger.info(  "  offset X=%.3f  Y=%.3f  Z=%.3f", float(row[5]), float(row[6]), float(row[7]))
+
                 # Append tool collection
                 with bpy.data.libraries.load(str(blend_file), link=False) as (data_from, data_to):
                     if tool_name in data_from.collections:
                         data_to.collections = [tool_name]
                     else:
-                        print(f"Collection '{tool_name}' not found in {blend_file}")
+                        logger.warning("Collection '%s' not found in %s", tool_name, blend_file)
                         continue
 
                 appended_tool = bpy.data.collections.get(tool_name)
@@ -122,7 +155,7 @@ def place_tools():
                 move_to_pos(park_name,  float(row[2]), float(row[3]))
 
             else:
-                print(f"Tool {tool_id} ({tool_name}): no .blend file found")
+                logger.warning("Tool %s (%s): no .blend file found", tool_id, tool_name)
 
 
 def main():

@@ -21,10 +21,6 @@ def _jubilee_root() -> Path:
         pytest.skip("jubilee.paths/jubilee_dir not registered — run inside pixi environment")
 
 
-def _sys_dir() -> str:
-    return str(_jubilee_root() / "firmware" / "sys")
-
-
 def _latest_gcode() -> str:
     return str(_jubilee_root() / "gcode_logs" / "latest.gcode")
 
@@ -107,43 +103,119 @@ def test_resolve_raises_without_entry_point():
 
 
 # ---------------------------------------------------------------------------
-# tool_id discovery
+# tool_id: run() from machine_state.json
 # ---------------------------------------------------------------------------
 
-def test_tool_id_finds_firmware_sys():
-    sys_dir = _sys_dir()
-    assert os.path.isdir(sys_dir), f"firmware/sys not found at: {sys_dir}"
-    assert os.path.isfile(os.path.join(sys_dir, "config.g")), f"config.g missing in: {sys_dir}"
-
-
-def test_tool_data_csv_is_created(tmp_path):
-    from jubilee_twin.pipeline.tool_id import extract_names, extract_parks, extract_offset
+def test_run_uses_machine_state_names_and_offsets(tmp_path):
+    import json
     import csv
+    from jubilee_twin.pipeline.tool_id import run
 
-    sys_dir = _sys_dir()
-    names = extract_names(sys_dir)
-    parks = extract_parks(sys_dir)
-    offsets = extract_offset(sys_dir)
+    state = {
+        "tools": {"0": {"name": "OVERRIDE_NAME"}},
+        "tool_offsets": {"0": [99.0, 88.0, 77.0]},
+    }
+    state_file = tmp_path / "machine_state.json"
+    state_file.write_text(json.dumps(state))
 
-    assert isinstance(names, dict), "extract_names should return a dict"
-    assert isinstance(parks, dict), "extract_parks should return a dict"
-    assert isinstance(offsets, dict), "extract_offset should return a dict"
-    assert len(names) > 0, f"No tools found in {sys_dir}/config.g"
+    out_csv = run(output_dir=str(tmp_path), machine_state_path=str(state_file))
 
-    # Write to tmp CSV and verify structure
-    out = tmp_path / "tool_data.csv"
-    with open(out, "w", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(["Tool_ID", "Name", "Park_X", "Park_Y", "Park_Z", "Offset_X", "Offset_Y", "Offset_Z"])
-        for i in range(4):
-            import numpy as np
-            park = parks.get(i, np.zeros(3))
-            offset = offsets.get(i, np.zeros(3))
-            writer.writerow([i, names.get(i, f"Unassigned_Tool_{i}"), *park, *offset])
+    with open(out_csv, newline="") as f:
+        rows = list(csv.DictReader(f))
+    row0 = rows[0]
+    assert row0["Name"] == "OVERRIDE_NAME"
+    assert float(row0["Offset_X"]) == pytest.approx(99.0)
+    assert float(row0["Offset_Y"]) == pytest.approx(88.0)
 
-    rows = list(csv.reader(open(out)))
-    assert rows[0] == ["Tool_ID", "Name", "Park_X", "Park_Y", "Park_Z", "Offset_X", "Offset_Y", "Offset_Z"]
-    assert len(rows) == 5, f"Expected header + 4 tool rows, got {len(rows)} rows"
+
+def test_run_uses_machine_state_parks(tmp_path):
+    import json
+    import csv
+    from jubilee_twin.pipeline.tool_id import run
+
+    state = {
+        "tools": {},
+        "tool_offsets": {},
+        "tool_parks": {"0": [111.1, 222.2, 0.0]},
+    }
+    state_file = tmp_path / "machine_state.json"
+    state_file.write_text(json.dumps(state))
+
+    out_csv = run(output_dir=str(tmp_path), machine_state_path=str(state_file))
+
+    with open(out_csv, newline="") as f:
+        rows = list(csv.DictReader(f))
+    row0 = rows[0]
+    assert float(row0["Park_X"]) == pytest.approx(111.1)
+    assert float(row0["Park_Y"]) == pytest.approx(222.2)
+
+
+def test_run_falls_back_to_defaults_when_no_state(tmp_path):
+    """With no saved state and resolve unavailable, defaults give known park positions."""
+    import csv
+    from jubilee_twin.pipeline.tool_id import run
+    from unittest.mock import patch
+
+    with patch("jubilee_twin.pipeline.tool_id.resolve", side_effect=RuntimeError("no entry point")):
+        out_csv = run(output_dir=str(tmp_path))
+
+    with open(out_csv, newline="") as f:
+        rows = list(csv.DictReader(f))
+    # Standard Jubilee parks: tool 0 at X=277, tool 3 at X=19
+    assert float(rows[0]["Park_X"]) == pytest.approx(277.0)
+    assert float(rows[3]["Park_X"]) == pytest.approx(19.0)
+
+
+def test_run_uses_saved_state_over_defaults(tmp_path):
+    import json, csv
+    from jubilee_twin.pipeline.tool_id import run
+    from unittest.mock import patch
+
+    state = {
+        "tools": {"0": {"name": "MySyringe"}},
+        "tool_offsets": {},
+        "tool_parks": {"0": [55.0, 66.0, 0.0]},
+    }
+    state_file = tmp_path / "machine_state.json"
+    state_file.write_text(json.dumps(state))
+
+    # address is absent so live query is skipped; saved file is used
+    out_csv = run(output_dir=str(tmp_path), machine_state_path=str(state_file))
+
+    with open(out_csv, newline="") as f:
+        rows = list(csv.DictReader(f))
+    assert rows[0]["Name"] == "MySyringe"
+    assert float(rows[0]["Park_X"]) == pytest.approx(55.0)
+
+
+def test_run_live_query_takes_priority_over_saved(tmp_path):
+    import json, csv
+    from jubilee_twin.pipeline.tool_id import run
+    from unittest.mock import patch
+
+    saved_state = {
+        "address": "192.168.1.2",
+        "tools": {"0": {"name": "OldName"}},
+        "tool_offsets": {},
+        "tool_parks": {"0": [1.0, 2.0, 0.0]},
+    }
+    live_state = {
+        "transport": "HTTPTransport",
+        "address": "192.168.1.2",
+        "tools": {"0": {"name": "LiveName"}},
+        "tool_offsets": {},
+        "tool_parks": {"0": [99.0, 88.0, 0.0]},
+    }
+    state_file = tmp_path / "machine_state.json"
+    state_file.write_text(json.dumps(saved_state))
+
+    with patch("jubilee_twin.pipeline.tool_id._try_live_query", return_value=live_state):
+        out_csv = run(output_dir=str(tmp_path), machine_state_path=str(state_file))
+
+    with open(out_csv, newline="") as f:
+        rows = list(csv.DictReader(f))
+    assert rows[0]["Name"] == "LiveName"
+    assert float(rows[0]["Park_X"]) == pytest.approx(99.0)
 
 
 # ---------------------------------------------------------------------------

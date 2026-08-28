@@ -24,13 +24,12 @@ SENSOR_WIDTH_MM = 36.0
 
 
 def _load_params() -> dict:
-    twin_root_str = os.path.dirname(os.path.dirname(bpy.data.filepath))
     addon_dir = os.path.dirname(__file__)
     if addon_dir not in sys.path:
         sys.path.insert(0, addon_dir)
+    import scene_utils
     from camera_params import load_camera_params
-    from pathlib import Path
-    return load_camera_params(Path(twin_root_str))
+    return load_camera_params(scene_utils.twin_root())
 
 
 def main():
