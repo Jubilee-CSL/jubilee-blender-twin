@@ -1,4 +1,5 @@
 import bpy
+import sys
 import numpy as np
 from mathutils import Vector
 import bmesh
@@ -373,16 +374,20 @@ def _trace_ray_traj(frame_num,origins,directions,frame):
 
     colors = [c for c in np.linspace((0, 0, 1), (1, 0, 0), num=frame_num, dtype=float)]
 
-    import blender_plots as bplt  # optional; not in Blender's bundled Python
-    arrows = bplt.Arrows(origins,
-                np.tile(directions[frame-2], (len(origins), 1)),
-                color=colors[frame-1],
-                name=f"frame_{frame}_directions",
-                head_length=0.001,
-                radius=.0005,
-                radius_ratio=2,
-                end_trim_length=0)
-    
+    try:
+        import blender_plots as bplt
+        arrows = bplt.Arrows(origins,
+                    np.tile(directions[frame-2], (len(origins), 1)),
+                    color=colors[frame-1],
+                    name=f"frame_{frame}_directions",
+                    head_length=0.001,
+                    radius=.0005,
+                    radius_ratio=2,
+                    end_trim_length=0)
+    except Exception as e:
+        print(f"Arrow visualisation skipped: {e}")
+        return
+
     if arrows is not None:
         blender_obj = bpy.data.objects.get(f"frame_{frame}_directions")
         if blender_obj is not None:
@@ -485,6 +490,9 @@ def ray_tracing_CD():
 # Run automatically when executed as a --python script (not when imported by the addon)
 if __name__ == "__main__":
     ray_tracing_CD()
+    if "--background" in sys.argv:
+        bpy.ops.wm.save_mainfile()
+        print(f"Saved {bpy.data.filepath}")
 
 
     

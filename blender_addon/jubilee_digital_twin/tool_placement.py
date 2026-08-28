@@ -65,6 +65,7 @@ def move_to_pos(tool_name,x_pos,y_pos):
 def place_tools():
     _ensure_colorlog()
     twin_root = _setup()
+    import scene_utils
     logger.info("Placing tools from tool_data.csv")
 
     # Use live head position from machine_status.json if available; else park at home.

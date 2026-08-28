@@ -12,14 +12,19 @@ import sys
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 tool_data_path = os.path.join(SCRIPT_DIR, "..", "..", "pipeline_data", "tool_data.csv")
 
-def _identify_tool(x,y):
+def _identify_tool(x, y):
+    """Return the tool_id whose park position is nearest (X,Y); returns None if no match within 30 mm."""
+    closest_id = None
+    closest_dist = float('inf')
     with open(tool_data_path, newline='') as csvfile:
         reader = csv.reader(csvfile)
         next(reader)
         for row in reader:
-            if float(row[2]) == x and float(row[3]) == y:
-                return float(row[0])
-        return None
+            dist = ((float(row[2]) - x) ** 2 + (float(row[3]) - y) ** 2) ** 0.5
+            if dist < closest_dist:
+                closest_dist = dist
+                closest_id = float(row[0])
+    return closest_id if closest_dist < 30.0 else None
 
 
 def _extract_numeric_after(token: str) -> float | None:

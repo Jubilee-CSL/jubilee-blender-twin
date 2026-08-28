@@ -88,6 +88,7 @@ def apply_machine_state(positions: dict, active_tool_idx) -> None:
     gantry_world = gantry_anchor.evaluated_get(depsgraph).matrix_world.copy()
 
     active_name = identify_tool(float(active_idx), tool_data_path) if active_idx >= 0 else None
+    # active_name may be None if the tool index has no entry in tool_data.csv
 
     tools_col = bpy.data.collections.get("Tools")
     if tools_col:
@@ -160,9 +161,12 @@ def run_animation():
     for frame, (x, y, z, u, toolchange, tool_id) in enumerate(points, start=1):
         if toolchange > 0:
             tool_name = identify_tool(float(tool_id), tool_data_path)
+            if tool_name is None:
+                print(f"Tool id {tool_id} not found in tool_data.csv — skipping tool-change at frame {frame}")
+                continue
             tool = bpy.data.collections.get(tool_name)
             if tool is None:
-                print(f"Collection {tool_name} not found")
+                print(f"Collection '{tool_name}' not found in scene — was Place Tools run?")
                 continue
 
             print(tool.name)
@@ -176,11 +180,6 @@ def run_animation():
             gantry_world = gantry_anchor_eval.matrix_world.copy()
 
             print(f"Frame {frame}: gantry at {gantry_world.translation}")
-            print(f"Frame {frame}: expected dock ~({(x_max - x/1000):.4f}, {(y_max - y/1000):.4f})")
-            print(f"x_min={x_min}, y_min={y_min}")
-            print(f"raw gcode at toolchange: x={x}mm, y={y}mm")
-            print(f"expected blender pos: ({(x_max - x/1000):.4f}, {(y_max - y/1000):.4f})")
-            print(f"gantry actual pos: {gantry_world.translation.xy}")
 
             for obj in tool.objects[:]:
                 to_remove = [c for c in obj.constraints if c.type == 'CHILD_OF']
@@ -211,6 +210,10 @@ def run_animation():
 
     bpy.context.scene.frame_end = len(points)
     print(f"Animation complete: {len(points)} frames.")
+
+    if "--background" in sys.argv:
+        bpy.ops.wm.save_mainfile()
+        print(f"Saved {bpy.data.filepath}")
 
 
 if __name__ == "__main__":
