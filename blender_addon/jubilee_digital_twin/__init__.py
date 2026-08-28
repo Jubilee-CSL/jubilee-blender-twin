@@ -104,16 +104,21 @@ class ANIM_OT_animate(Operator):
         if twin_root not in sys.path:
             sys.path.insert(0, twin_root)
 
-        # If a gcode file is selected, regenerate pathout.csv first
         gcode_file = context.scene.jubilee_gcode_file
         if gcode_file and os.path.isfile(gcode_file):
             from jubilee_twin.pipeline import path_follower
             pipeline_data_dir = os.path.join(twin_root, "pipeline_data")
             path_follower.run(gcode_file=gcode_file, output_dir=pipeline_data_dir)
+        elif gcode_file:
+            self.report({'WARNING'}, f"GCode file not found: {gcode_file} — animating from existing pathout.csv")
 
-        # deferred import so bpy.data.filepath is set before animate_path runs
         from . import animate_path as ap
-        ap.run_animation()
+        try:
+            ap.run_animation()
+        except Exception as e:
+            self.report({'ERROR'}, str(e))
+            return {'CANCELLED'}
+        self.report({'INFO'}, "Animation complete")
         return {'FINISHED'}
 
 
@@ -139,13 +144,16 @@ class SETUP_OT_copy_machine_state(Operator):
         status_path = os.path.join(pipeline_data_dir, "machine_status.json")
         try:
             with open(status_path) as f:
-                pos = json.load(f).get("head_position", {})
+                status = json.load(f)
+            pos = status.get("head_position", {})
+            source = status.get("source", "unknown")
             from . import scene_utils
             scene_utils.drive_to_mm(pos.get("X", 0.0), pos.get("Y", 0.0), pos.get("Z", 0.0))
+            live = "live" in source.lower() or "hardware" in source.lower()
+            lvl = 'INFO' if live else 'WARNING'
+            self.report({lvl}, f"Machine state from: {source}")
         except Exception as e:
             self.report({'WARNING'}, f"Could not apply position: {e}")
-            return {'FINISHED'}
-        self.report({'INFO'}, "Machine state copied")
         return {'FINISHED'}
 
 
@@ -205,7 +213,15 @@ class ANIM_OT_populate_deck(Operator):
 
     def execute(self, context):
         from . import populate_deck as pd
-        pd.populate_deck()
+        try:
+            pd.populate_deck()
+        except FileNotFoundError as e:
+            self.report({'ERROR'}, f"Deck not found: {e}")
+            return {'CANCELLED'}
+        except Exception as e:
+            self.report({'ERROR'}, str(e))
+            return {'CANCELLED'}
+        self.report({'INFO'}, "Deck populated")
         return {'FINISHED'}
 
 
@@ -217,9 +233,12 @@ class ANIM_OT_raytracing(Operator):
 
     def execute(self, context):
         from . import ray_tracing as rt
-
-        rt._collision_list.clear()
-        rt.ray_tracing_CD()
+        try:
+            rt._collision_list.clear()
+            rt.ray_tracing_CD()
+        except Exception as e:
+            self.report({'ERROR'}, str(e))
+            return {'CANCELLED'}
 
         context.scene.collision_list.clear()
         for event in rt._collision_list:
@@ -227,7 +246,9 @@ class ANIM_OT_raytracing(Operator):
             item.frame = event.frame
             item.object_name = event.collided_object
         context.scene.collision_list_index = 0
-
+        count = len(rt._collision_list)
+        self.report({'WARNING'} if count else {'INFO'},
+                    f"{count} collision(s) detected" if count else "No collisions detected")
         return {'FINISHED'}
 
 
@@ -452,6 +473,7 @@ class ANIM_PT_raytracing(Panel):
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "Twin"
+    bl_order = 2
 
     def draw(self, context):
         layout = self.layout
@@ -487,7 +509,7 @@ class ANIM_PT_scanner(Panel):
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "Twin"
-    bl_order = 2
+    bl_order = 3
 
     def draw(self, context):
         layout = self.layout
