@@ -220,6 +220,31 @@ class TwinDriver:
 
         return rc
 
+    def scan(
+        self,
+        *,
+        x_min: float, x_max: float, x_steps: int,
+        y_min: float, y_max: float, y_steps: int,
+        z_min: float, z_max: float, z_steps: int,
+        width: int, height: int,
+        output_root: Path | None = None,
+    ) -> int:
+        """Render a virtual-scanner grid in the working blend via headless Blender."""
+        td = twin_dir()
+        blend = self._working_blend()
+        script = td / "blender_addon" / "jubilee_digital_twin" / "scan.py"
+        cmd = [
+            self.blender_exe, str(blend), "--background", "--python", str(script), "--",
+            "--x-min", str(x_min), "--x-max", str(x_max), "--x-steps", str(x_steps),
+            "--y-min", str(y_min), "--y-max", str(y_max), "--y-steps", str(y_steps),
+            "--z-min", str(z_min), "--z-max", str(z_max), "--z-steps", str(z_steps),
+            "--width", str(width), "--height", str(height),
+        ]
+        if output_root is not None:
+            cmd += ["--output-root", str(output_root)]
+        log.info("Running virtual scanner (headless Blender)")
+        return subprocess.run(cmd).returncode
+
     def open_interactive(self) -> None:
         """Open the working blend file in the Blender GUI without running any script."""
         subprocess.Popen([self.blender_exe, str(self._working_blend())])

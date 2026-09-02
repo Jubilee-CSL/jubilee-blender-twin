@@ -13,8 +13,6 @@ camera.yaml records the calibration used *upstream* of the render, not applied.
 from __future__ import annotations
 
 import json
-import os
-import re
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -24,10 +22,9 @@ from typing import Iterable
 import bpy
 
 
-# ── Reference-dataset defaults (matches images_justin/) ─────────────────────
+# ── Scan defaults ──────────────────────────────────
 # Filename convention: img_x{X}_y{Y}_z{Z}.jpg with integer millimetres, where
 # (x, y) is the toolhead XY position and z is the bed height.
-FILENAME_RE = re.compile(r"img_x(-?\d+)_y(-?\d+)_z(-?\d+)\.(?:jpg|jpeg|png)$", re.IGNORECASE)
 FILENAME_TEMPLATE = "img_x{x}_y{y}_z{z}.jpg"
 
 DEFAULT_X_MIN, DEFAULT_X_MAX, DEFAULT_X_STEPS = 110.0, 250.0, 5
@@ -71,39 +68,6 @@ def _drive_to_mm(x_mm: float, y_mm: float, z_mm: float) -> None:
     _ensure_pipeline_on_path()
     from . import scene_utils
     scene_utils.drive_to_mm(x_mm, y_mm, z_mm)
-
-
-def _infer_range(values: list[int]) -> tuple[float, float, int]:
-    """Given a sorted unique list of ints, return (min, max, len)."""
-    uniq = sorted(set(values))
-    if not uniq:
-        return 0.0, 0.0, 1
-    return float(uniq[0]), float(uniq[-1]), len(uniq)
-
-
-def scan_reference_folder(folder: Path) -> dict | None:
-    """Parse img_x*_y*_z* filenames and derive per-axis (min, max, steps).
-
-    Returns None if the folder is missing or no matching files are found.
-    """
-    if not folder.is_dir():
-        return None
-    xs, ys, zs = [], [], []
-    for name in os.listdir(folder):
-        m = FILENAME_RE.match(name)
-        if not m:
-            continue
-        xs.append(int(m.group(1)))
-        ys.append(int(m.group(2)))
-        zs.append(int(m.group(3)))
-    if not xs:
-        return None
-    return {
-        "x": _infer_range(xs),
-        "y": _infer_range(ys),
-        "z": _infer_range(zs),
-        "count": len(xs),
-    }
 
 
 def _linspace(a: float, b: float, n: int) -> list[float]:

@@ -68,6 +68,22 @@ def main():
     snap.add_argument("--pop", action="store_true", help="Show the rendered image with matplotlib after rendering.")
     snap.add_argument("--blender", default=None, metavar="EXE")
 
+    # --- scan ---
+    scan = subparsers.add_parser("scan", help="Render a virtual-scanner image grid in headless Blender.")
+    scan.add_argument("--x-min", type=float, default=110.0, metavar="MM")
+    scan.add_argument("--x-max", type=float, default=250.0, metavar="MM")
+    scan.add_argument("--x-steps", type=int, default=5, metavar="N")
+    scan.add_argument("--y-min", type=float, default=80.0, metavar="MM")
+    scan.add_argument("--y-max", type=float, default=200.0, metavar="MM")
+    scan.add_argument("--y-steps", type=int, default=5, metavar="N")
+    scan.add_argument("--z-min", type=float, default=280.0, metavar="MM")
+    scan.add_argument("--z-max", type=float, default=320.0, metavar="MM")
+    scan.add_argument("--z-steps", type=int, default=3, metavar="N")
+    scan.add_argument("--width", type=int, default=1920, metavar="PX")
+    scan.add_argument("--height", type=int, default=1056, metavar="PX")
+    scan.add_argument("--output-root", type=Path, default=None, metavar="PATH", help="Parent directory for the timestamped scan folder (default: Scans/).")
+    scan.add_argument("--blender", default=None, metavar="EXE")
+
     # --- open ---
     open_cmd = subparsers.add_parser("open", help="Open the working blend file (or jubilee_belt.blend) in the Blender GUI.")
     open_cmd.add_argument("--blender", default=None, metavar="EXE")
@@ -131,6 +147,19 @@ def main():
 
     elif args.command == "snapshot":
         rc = driver.snapshot(x_mm=args.x, y_mm=args.y, z_mm=args.z, output=args.output, pop=args.pop)
+        raise SystemExit(rc)
+
+    elif args.command == "scan":
+        if min(args.x_steps, args.y_steps, args.z_steps) < 1:
+            parser.error("--x-steps, --y-steps, and --z-steps must each be at least 1")
+        if min(args.width, args.height) < 16:
+            parser.error("--width and --height must each be at least 16")
+        rc = driver.scan(
+            x_min=args.x_min, x_max=args.x_max, x_steps=args.x_steps,
+            y_min=args.y_min, y_max=args.y_max, y_steps=args.y_steps,
+            z_min=args.z_min, z_max=args.z_max, z_steps=args.z_steps,
+            width=args.width, height=args.height, output_root=args.output_root,
+        )
         raise SystemExit(rc)
 
     elif args.command == "open":
