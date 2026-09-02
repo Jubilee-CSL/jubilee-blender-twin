@@ -1,0 +1,22 @@
+# Fallback camera calibration shipped with jubilee-blender-twin.
+# Used by `jubilee-twin setup-scene` when the science_jubilee
+# `jubilee.paths / camera_params_yaml` entry point is not available.
+# Matches the schema of science_jubilee's own camera_params.yaml.
+camera:
+  fx: 1467.553917032269
+  fy: 1476.7692142590815
+  cx: 961.2134486884058
+  cy: 538.5647691981069
+  dist:
+    - -0.052024740428130545
+    - 0.5822565858991794
+    - 0.00019694752077129167
+    - -0.0005687317259763694
+    - -1.2161810267808781
+  offset:
+    - 0
+    - -20
+    - 0
+image:
+  width: 1920
+  height: 1056
