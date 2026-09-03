@@ -151,12 +151,13 @@ def test_run_uses_machine_state_parks(tmp_path):
 
 
 def test_run_falls_back_to_defaults_when_no_state(tmp_path):
-    """With no saved state and resolve unavailable, defaults give known park positions."""
+    """With no state source available, defaults give known park positions."""
     import csv
     from jubilee_twin.pipeline.tool_id import run
     from unittest.mock import patch
 
-    with patch("jubilee_twin.pipeline.tool_id.resolve", side_effect=RuntimeError("no entry point")):
+    with patch("jubilee_twin.pipeline.tool_id.resolve", side_effect=RuntimeError("no entry point")), \
+         patch("jubilee_twin.pipeline.tool_id._read_env_address", return_value=None):
         out_csv = run(output_dir=str(tmp_path))
 
     with open(out_csv, newline="") as f:
