@@ -103,8 +103,16 @@ class TwinDriver:
             return rc
 
         log.info("Done — open pipeline_data/jubilee_working.blend")
-        log.info("Next: jubilee-twin animate <gcode>  or  jubilee-twin snapshot")
-        log.info("Deck: use 'Populate Deck' in the addon after opening the blend")
+        log.info("Next steps (run 'jubilee-twin <command> --help' for all options):")
+        log.info("  open                         Open the working scene in Blender.")
+        log.info("  animate <gcode>              Bake a G-code path; --step MM, --interactive.")
+        log.info("  snapshot [--x X --y Y --z Z] Render one camera frame; --output PATH, --pop.")
+        log.info("  scan                         Render the virtual-camera grid; --x/y/z-*, --width/--height.")
+        log.info("  raytrace [gcode]             Run collision detection; pass G-code to refresh CSV data.")
+        log.info("  place-camera                 Recreate Toolhead_Cam after a scene/calibration change.")
+        log.info("  place-tools                  Re-add tool models from pipeline_data/tool_data.csv.")
+        log.info("Optional deck: populate-deck requires science-jubilee-interface and an exported deck.blend.")
+        log.info("All Blender commands accept --blender EXE (or use $JUBILEE_BLENDER_EXE / 'blender').")
         return 0
 
     def place_tools(self) -> int:
