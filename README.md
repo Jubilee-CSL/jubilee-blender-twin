@@ -13,6 +13,7 @@ A Blender-based *digital twin* of the [Jubilee](https://github.com/machineagency
 3. [Installation](#installation)
 4. [The Blender base file](#the-blender-base-file)
 5. [Full pipeline: CLI workflow](#full-pipeline-cli-workflow)
+   - [Scripting snapshots from pure Python](#scripting-snapshots-from-pure-python)
 6. [Full pipeline: Blender addon workflow](#full-pipeline-blender-addon-workflow)
 7. [Virtual image acquisition](#virtual-scanner-subpanel)
 8. [Connecting the interface app](#connecting-the-interface-app)
@@ -428,6 +429,50 @@ jubilee-twin open
 | `jubilee-twin open` | Open working blend in Blender GUI |
 
 All commands accept `--blender <path>` to override the executable.
+
+### Scripting snapshots from pure Python
+
+Every CLI command is a thin wrapper around `jubilee_twin.driver.TwinDriver`. Import it
+directly if you'd rather build the scene, move the axes, and take snapshots from your
+own Python script instead of shelling out to `jubilee-twin`:
+
+```python
+from pathlib import Path
+from jubilee_twin.driver import TwinDriver
+
+# Uses the 'twin_dir' entry point registered by `pip install -e .`.
+# Pass blender_exe="C:/path/to/blender.exe" instead if Blender isn't on PATH.
+driver = TwinDriver.from_entry_point()
+
+# 1. Build the working scene from a .blend file (defaults to blender_models/jubilee_base.blend
+#    if base_blend is omitted). This also writes tool_data.csv + jubilee_paths.json, places
+#    the tools at their parking positions, and mounts Toolhead_Cam using the calibration in
+#    jubilee_paths.json / camera_params.yaml.
+driver.setup_scene(base_blend=Path("blender_models/jubilee_base.blend"))
+
+# 2. Place labware from the latest interface-app experiment export (optional; requires
+#    science-jubilee-interface and a deck.blend exported beforehand).
+driver.populate_deck()
+
+# 3. Move the virtual axes to (x, y, z) mm and render through Toolhead_Cam.
+driver.snapshot(x_mm=150, y_mm=150, z_mm=300, output=Path("my_snapshot.jpg"))
+
+# 4. Or move through a full grid and render every point in a single headless session.
+driver.scan(
+    x_min=110, x_max=250, x_steps=5,
+    y_min=80, y_max=200, y_steps=5,
+    z_min=280, z_max=320, z_steps=3,
+    width=1920, height=1056,
+)
+```
+
+Each `TwinDriver` call launches Blender headlessly in the background and returns its exit
+code (`0` on success), so no Blender window or manual clicking is involved. Steps 1 and 2
+only need to run once per machine/experiment configuration — re-run `setup_scene()` only
+when tools or camera calibration change, and `populate_deck()` only when the labware
+layout changes. Repeated `snapshot()` calls (e.g. one per position in a loop) each start a
+fresh Blender process; for a large number of positions, prefer `scan()`, which does the
+whole grid in one session.
 
 ---
 
