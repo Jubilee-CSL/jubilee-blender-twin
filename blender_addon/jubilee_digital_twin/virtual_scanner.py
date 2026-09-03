@@ -53,20 +53,30 @@ def _load_camera_params() -> dict:
 
 # ── Small utilities ────────────────────────────────────────────────────────
 
+def _addon_dir_on_path() -> None:
+    """Match the sys.path style used by sibling scripts (snapshot.py, animate_path.py, ...)
+    so this module works whether imported as part of the package or as a bare script."""
+    addon_dir = str(Path(__file__).parent)
+    if addon_dir not in sys.path:
+        sys.path.insert(0, addon_dir)
+
+
 def _twin_root() -> Path:
-    from . import scene_utils
+    _addon_dir_on_path()
+    import scene_utils
     return scene_utils.twin_root()
 
 
 def _ensure_pipeline_on_path() -> None:
-    from . import scene_utils
+    _addon_dir_on_path()
+    import scene_utils
     scene_utils.ensure_pipeline_on_path()
 
 
 def _drive_to_mm(x_mm: float, y_mm: float, z_mm: float) -> None:
     """Thin wrapper kept for callers that import this name directly."""
     _ensure_pipeline_on_path()
-    from . import scene_utils
+    import scene_utils
     scene_utils.drive_to_mm(x_mm, y_mm, z_mm)
 
 

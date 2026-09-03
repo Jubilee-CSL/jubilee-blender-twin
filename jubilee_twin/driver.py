@@ -72,8 +72,11 @@ class TwinDriver:
         working = td / "pipeline_data" / "jubilee_working.blend"
         return working if working.exists() else td / "blender_models" / "jubilee_belt.blend"
 
-    def setup_scene(self) -> int:
-        """Full one-shot setup: query machine state, write CSVs, build working.blend with tools/camera/deck."""
+    def setup_scene(self, base_blend: Path | None = None) -> int:
+        """Full one-shot setup: query machine state, write CSVs, build working.blend with tools/camera/deck.
+
+        base_blend: use this .blend as the working-scene source instead of blender_models/jubilee_base.blend.
+        """
         from jubilee_twin.pipeline import tool_id
         import shutil
 
@@ -85,9 +88,9 @@ class TwinDriver:
         self._write_paths_cache()
         tool_id.run(output_dir=str(pipeline_data_dir))
 
-        base = td / "blender_models" / "jubilee_base.blend"
+        base = Path(base_blend) if base_blend is not None else td / "blender_models" / "jubilee_base.blend"
         if not base.exists():
-            raise FileNotFoundError(f"jubilee_base.blend not found at {base}")
+            raise FileNotFoundError(f"Base blend not found at {base}")
         working = pipeline_data_dir / "jubilee_working.blend"
         log.warning("base blend   → %s", working)
         shutil.copy2(base, working)

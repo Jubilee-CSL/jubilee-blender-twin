@@ -15,6 +15,7 @@ def main():
         help="Write CSVs + paths cache and copy jubilee_base.blend → jubilee_working.blend.",
     )
     setup_scene.add_argument("--blender", default=None, metavar="EXE")
+    setup_scene.add_argument("--blend-file", type=Path, default=None, metavar="PATH", help="Use this .blend as the working-scene source instead of blender_models/jubilee_base.blend.")
 
     # --- place-tools ---
     place_tools = subparsers.add_parser(
@@ -94,7 +95,7 @@ def main():
     driver = TwinDriver(blender_exe=args.blender if hasattr(args, "blender") else None)
 
     if args.command == "setup-scene":
-        rc = driver.setup_scene()
+        rc = driver.setup_scene(base_blend=args.blend_file)
         raise SystemExit(rc)
 
     elif args.command == "place-tools":
