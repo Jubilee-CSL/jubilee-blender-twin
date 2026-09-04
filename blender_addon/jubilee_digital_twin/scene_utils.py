@@ -68,3 +68,15 @@ def drive_to_mm(
         z_axis.keyframe_insert(data_path="location", frame=frame)
     else:
         bpy.context.view_layer.update()
+
+
+def read_mm() -> tuple[float, float, float]:
+    """Inverse of drive_to_mm: machine (X, Y, Z) in mm from the current axis empties."""
+    _ensure_pipeline_on_path()
+    from jubilee_twin.pipeline.utils import get_axis_max  # type: ignore
+    x_axis, y_axis, z_axis = get_axis_objects()
+    return (
+        (get_axis_max(x_axis, "X") - x_axis.location.x) * 1000.0,
+        (get_axis_max(y_axis, "Y") - y_axis.location.y) * 1000.0,
+        (get_axis_max(z_axis, "Z") - z_axis.location.z) * 1000.0,
+    )

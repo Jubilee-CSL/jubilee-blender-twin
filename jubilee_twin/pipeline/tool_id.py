@@ -124,7 +124,7 @@ def _backfill_parks(state: dict, trace) -> list[str]:
 def run(output_dir: str = None, machine_state_path: str = None) -> str:
     """Build pipeline_data/machine.json. Returns the output path.
 
-    Discovery order: live Duet query → gcode_logs/machine_state.json → tool plugins
+    Discovery order: live Duet query → pipeline_data/machine_state.json → tool plugins
     → built-in defaults. Pass machine_state_path= to skip discovery and use a
     specific file. Model paths for each slot are resolved from the installed tool
     plugins and written into the same records.

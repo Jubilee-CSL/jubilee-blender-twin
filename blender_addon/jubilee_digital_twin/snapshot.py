@@ -59,11 +59,17 @@ if __name__ == "__main__":
     p.add_argument("--output", type=Path, default=None)
     args = p.parse_args(argv)
 
-    if args.x is not None and args.y is not None and args.z is not None:
+    if args.x is not None or args.y is not None or args.z is not None:
         addon_dir = str(Path(__file__).parent)
         if addon_dir not in sys.path:
             sys.path.insert(0, addon_dir)
-        import virtual_scanner as vs  # shared axis-driving logic
-        vs._drive_to_mm(args.x, args.y, args.z)
+        import scene_utils
+        # Omitted axes stay at their current machine position.
+        cur_x, cur_y, cur_z = scene_utils.read_mm()
+        scene_utils.drive_to_mm(
+            args.x if args.x is not None else cur_x,
+            args.y if args.y is not None else cur_y,
+            args.z if args.z is not None else cur_z,
+        )
 
     take_snapshot(output=args.output)

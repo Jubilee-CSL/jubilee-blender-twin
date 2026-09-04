@@ -42,8 +42,9 @@ Jubilee packages through the `jubilee.paths` entry-point group.
 
 ```
 science_jubilee            ← machine control, G-code logs, camera calibration
-  ├─ gcode_logs/            ← recorded experiments (.gcode files)
-  └─ calibration/           ← camera_params.yaml
+  ├─ pipeline_data/         ← recorded experiments and machine snapshot
+  │   └─ gcode_logs/        ← .gcode files
+  └─ calibration/          ← camera_params.yaml
 
 science-jubilee-interface  ← GUI for deck/experiment design
   └─ experiment_deck/       ← per-experiment folders with deck.json + deck.blend
@@ -190,7 +191,7 @@ answers. Whatever it ends up using is printed as `Machine state: <source>`.
 flowchart LR
   A["live Duet<br/>address from .env.hardware"]
   B["live Duet<br/>address from the saved snapshot"]
-  C["saved snapshot<br/>gcode_logs/machine_state.json"]
+  C["saved snapshot<br/>pipeline_data/machine_state.json"]
   D["installed tool plugins<br/>tpostN.g · setup_duet.py"]
   E["bundled defaults<br/>jubilee_twin/defaults/machine_state.json"]
   OUT(["pipeline_data/machine.json"])
@@ -203,7 +204,7 @@ arrows are the failure path.
 
 > **What is the saved snapshot?** Every time you open a `science_jubilee` session,
 > its `RecordingTransport` asks the machine for a summary and writes it to
-> `science_jubilee/gcode_logs/machine_state.json` — tool names, offsets, park
+> `science_jubilee/pipeline_data/machine_state.json` — tool names, offsets, park
 > positions, axis positions and the machine's address. It is a snapshot of the
 > last time you were actually connected, so the twin can reproduce that machine's
 > layout when the hardware is switched off. Its `address` field is also what the
@@ -591,7 +592,7 @@ If a `jubilee-twin` command is not found, your virtual environment is probably n
 jubilee-twin animate path/to/experiment.gcode
 ```
 
-With `science-jubilee` installed, you can instead use a filename — the CLI looks it up in `science_jubilee/gcode_logs/`:
+With `science-jubilee` installed, you can instead use a filename — the CLI looks it up in `science_jubilee/pipeline_data/gcode_logs/` (via the `gcode_logs_dir` entry point):
 
 ```bash
 jubilee-twin animate latest.gcode
@@ -713,7 +714,7 @@ Requires:
 
 ### Animation subpanel
 
-The **GCode** dropdown lists all `.gcode` files from `science_jubilee/gcode_logs/`. Select a file then click **Animate from CSV**.
+The **GCode** dropdown lists all `.gcode` files from `science_jubilee/pipeline_data/gcode_logs/`. Select a file then click **Animate from CSV**.
 
 When a file is selected, clicking Animate:
 1. Runs the path follower inside Blender to regenerate `pathout.csv`.
