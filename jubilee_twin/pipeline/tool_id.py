@@ -1,12 +1,18 @@
 import os
-import csv
 import json
-import re
-import warnings
 import numpy as np
 from pathlib import Path
 from jubilee_twin.paths import resolve, twin_dir
 from jubilee_twin.log import get_logger
+from jubilee_twin import machine_data
+from jubilee_twin import trace as trace_mod
+from jubilee_twin.trace import Section
+from jubilee_twin.tool_plugins import (
+    alias_index,
+    discover_tool_assets,
+    merge_plugin_fallback,
+    normalize,
+)
 
 logger = get_logger(__name__)
 
@@ -14,177 +20,128 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _DEFAULT_STATE = Path(__file__).parent.parent / "defaults" / "machine_state.json"
 
 
-def _parse_park_position(content: str) -> list:
-    """Extract [X, Y, Z] from a tpost{n}.g file by reading G53 lines."""
-    pos = [0.0, 0.0, 0.0]
-    for line in content.splitlines():
-        stripped = line.strip()
-        if not stripped.upper().startswith("G53"):
-            continue
-        for letter, idx in (("X", 0), ("Y", 1), ("Z", 2)):
-            m = re.search(rf'(?<![A-Z]){letter}(-?[\d.]+)', stripped, re.IGNORECASE)
-            if m:
-                pos[idx] = float(m.group(1))
-    return pos
-
-
-def _try_live_query(address: str, timeout: float = 3.0) -> dict | None:
-    """Fetch a fresh machine_state dict from the Duet via HTTP. Returns None on failure."""
+def _science_jubilee_resolver():
+    """science_jubilee owns the live/snapshot chain; the twin runs without it."""
     try:
-        import urllib.request
-
-        def post(cmd: str) -> str:
-            req = urllib.request.Request(
-                f"http://{address}/machine/code",
-                data=cmd.encode(),
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=timeout) as r:
-                return r.read().decode().strip()
-
-        def download_sys(filename: str) -> str:
-            for url in (
-                f"http://{address}/machine/file/0:/sys/{filename}",
-                f"http://{address}/rr_download?name=0:/sys/{filename}",
-            ):
-                try:
-                    with urllib.request.urlopen(url, timeout=timeout) as r:
-                        if r.status == 200:
-                            return r.read().decode()
-                except Exception:
-                    continue
-            raise OSError(f"Could not download {filename}")
-
-        state: dict = {"transport": "HTTPTransport", "address": address}
-
-        reply = post("M114")
-        positions = {}
-        for part in reply.split():
-            letter, sep, val = part.partition(":")
-            if sep and letter.upper() in ("X", "Y", "Z", "U"):
-                try:
-                    positions[letter.upper()] = float(val)
-                except ValueError:
-                    pass
-        state["positions"] = positions
-
-        m = re.search(r'\bTool\s+(\d+)', post("T"), re.IGNORECASE)
-        state["active_tool"] = int(m.group(1)) if m else -1
-
-        raw = json.loads(post('M409 K"tools"')).get("result") or []
-        state["tools"] = {str(t["number"]): {"name": t.get("name", "")} for t in raw}
-        state["tool_offsets"] = {str(t["number"]): t.get("offsets", [0.0, 0.0, 0.0]) for t in raw}
-
-        parks = {}
-        for idx in range(4):
-            try:
-                parks[str(idx)] = _parse_park_position(download_sys(f"tpost{idx}.g"))
-            except Exception:
-                pass
-        state["tool_parks"] = parks
-
-        return state
-    except Exception:
+        from science_jubilee.machine_state import resolve as _resolve
+        return _resolve
+    except ImportError:
         return None
 
 
-def _read_env_address() -> str | None:
-    """Read JUBILEE_ADDRESS from science-jubilee .env.hardware (only when JUBILEE_TRANSPORT=hardware)."""
-    def _parse_env(env_file: Path) -> str | None:
-        values: dict[str, str] = {}
-        for line in env_file.read_text().splitlines():
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                k, _, v = line.partition("=")
-                values[k.strip()] = v.strip()
-        if values.get("JUBILEE_TRANSPORT", "").lower() == "hardware":
-            return values.get("JUBILEE_ADDRESS") or None
+def _env_hardware_address() -> str | None:
+    """Address from .env.hardware, via the path the driver cached for Blender."""
+    resolver = _science_jubilee_resolver()
+    if resolver is None:
         return None
+    from science_jubilee.machine_state import read_env_address
 
-    # Primary: entry point (CLI/pixi context).
     try:
-        env_file = resolve("jubilee_dir") / ".env.hardware"
-        if env_file.is_file():
-            return _parse_env(env_file)
+        return read_env_address()
     except Exception:
         pass
-
-    # Fallback: path pre-written into jubilee_paths.json by the driver (Blender addon context).
+    # Blender addon context: jubilee_dir is not importable, but its path was cached.
     try:
         paths_json = twin_dir() / "pipeline_data" / "jubilee_paths.json"
         env_path = json.loads(paths_json.read_text()).get("env_hardware")
-        if env_path:
-            env_file = Path(env_path)
-            if env_file.is_file():
-                return _parse_env(env_file)
+        return read_env_address(Path(env_path)) if env_path else None
     except Exception:
-        pass
-
-    return None
+        return None
 
 
-def _load_machine_state(machine_state_path: str | None = None) -> tuple[dict, str]:
+def _load_machine_state(machine_state_path: str | None = None,
+                        trace: Section | None = None) -> tuple[dict, str]:
     """Return (state_dict, source_label) using a 3-step fallback.
 
-    1. Live Duet query via JUBILEE_ADDRESS from science-jubilee .env.hardware
-       (only during autodiscovery — skipped when machine_state_path is explicit)
-    2. Live Duet query via address stored in gcode_logs/machine_state.json
-    3. Latest machine_state.json from gcode_logs/
-    4. Built-in defaults (standard 4-tool Jubilee park positions)
+    1. science_jubilee's shared chain: live Duet → snapshot address → snapshot
+    2. Installed tool plugins (names/parks/offsets from their own Duet macros)
+    3. Built-in defaults (standard 4-tool Jubilee park positions)
     """
-    # Step 1 — live query via .env.hardware (autodiscovery only)
-    if not machine_state_path:
-        hw_address = _read_env_address()
-        if hw_address:
-            live = _try_live_query(hw_address)
-            if live is not None:
-                return live, f"live (.env.hardware {hw_address})"
+    trace = trace or trace_mod.session().section("Machine state")
 
-    # Step 2 — live query via address from last saved state
-    saved_path: Path | None = None
-    if machine_state_path:
-        saved_path = Path(machine_state_path)
+    resolver = _science_jubilee_resolver()
+    if resolver is None:
+        trace.failed("science_jubilee", "not installed — cannot reach a machine")
     else:
+        saved_path = Path(machine_state_path) if machine_state_path else None
         try:
-            candidate = resolve("jubilee_dir") / "gcode_logs" / "machine_state.json"
-            if candidate.exists():
-                saved_path = candidate
-        except RuntimeError:
-            pass
-
-    if saved_path and saved_path.is_file():
-        try:
-            with open(saved_path) as f:
-                saved = json.load(f)
-            address = saved.get("address")
-            if address:
-                live = _try_live_query(address)
-                if live is not None:
-                    return live, f"live ({address})"
-        except Exception:
-            pass
-
-    # Step 2 — saved machine_state.json
-    if saved_path and saved_path.is_file():
-        try:
-            with open(saved_path) as f:
-                return json.load(f), str(saved_path)
+            state, source = resolver(
+                address=None if machine_state_path else _env_hardware_address(),
+                saved_path=saved_path,
+                allow_live=not machine_state_path,
+            )
         except Exception as exc:
-            logger.warning("Could not read %s: %s", saved_path, exc)
+            trace.failed("science_jubilee", str(exc))
+        else:
+            if source != "empty machine":
+                trace.ok(source.split(" ")[0], source)
+                return state, source
+            trace.failed("live Duet / saved snapshot", "no machine and no snapshot")
 
-    # Step 3 — built-in defaults
-    logger.warning("No live machine and no saved state found — using built-in defaults")
+    # Tool plugins, then built-in defaults for whatever is left
+    logger.warning("No live machine and no saved state found — falling back to plugins/defaults")
+    state = {"tools": {}, "tool_offsets": {}, "tool_parks": {}}
+    applied = merge_plugin_fallback(state)
+    if applied:
+        trace.partial("installed tool plugins", ", ".join(applied))
+    else:
+        trace.failed("installed tool plugins", "no plugin declares a tool number")
+
     with open(_DEFAULT_STATE) as f:
-        return json.load(f), f"defaults ({_DEFAULT_STATE.name})"
+        defaults = json.load(f)
+    for section in ("tools", "tool_offsets", "tool_parks"):
+        for slot, value in defaults.get(section, {}).items():
+            state[section].setdefault(slot, value)
+    for key, value in defaults.items():
+        state.setdefault(key, value)
+    trace.ok("bundled defaults", _DEFAULT_STATE.name)
+
+    if applied:
+        return state, f"plugins ({', '.join(applied)}) + defaults ({_DEFAULT_STATE.name})"
+    return state, f"defaults ({_DEFAULT_STATE.name})"
+
+
+def _backfill_parks(state: dict, trace) -> list[str]:
+    """Give slots the standard Jubilee park position when the source had none.
+
+    A snapshot can carry tool names and offsets but an empty ``tool_parks``, and
+    an all-zero park would stack every tool at the origin.
+    """
+    with open(_DEFAULT_STATE) as f:
+        defaults = json.load(f).get("tool_parks", {})
+
+    parks = state.setdefault("tool_parks", {})
+    filled: list[str] = []
+    for slot, value in defaults.items():
+        if not any(parks.get(slot) or []):
+            parks[slot] = value
+            filled.append(slot)
+    if filled:
+        trace.partial("bundled park positions", f"slots {', '.join(filled)} had none")
+    return filled
 
 
 def run(output_dir: str = None, machine_state_path: str = None) -> str:
-    """Build tool_data.csv. Returns the output path.
+    """Build pipeline_data/machine.json. Returns the output path.
 
-    Discovery order: live Duet query → gcode_logs/machine_state.json → built-in defaults.
-    Pass machine_state_path= to skip discovery and use a specific file.
+    Discovery order: live Duet query → gcode_logs/machine_state.json → tool plugins
+    → built-in defaults. Pass machine_state_path= to skip discovery and use a
+    specific file. Model paths for each slot are resolved from the installed tool
+    plugins and written into the same records.
     """
-    state, source = _load_machine_state(machine_state_path)
+    trace = trace_mod.session(output_dir).section("Machine state", reset=True)
+    state, source = _load_machine_state(machine_state_path, trace)
+
+    assets = discover_tool_assets()
+
+    # A live/saved state can still have unnamed slots; plugins fill only those.
+    if not source.startswith("plugins"):
+        applied = merge_plugin_fallback(state, assets)
+        if applied:
+            source = f"{source} + plugins ({', '.join(applied)})"
+
+    if _backfill_parks(state, trace):
+        source = f"{source} + default parks"
 
     tool_names: dict = {}
     tool_offsets: dict = {}
@@ -219,34 +176,59 @@ def run(output_dir: str = None, machine_state_path: str = None) -> str:
 
     out_dir = output_dir or os.path.abspath(os.path.join(SCRIPT_DIR, "..", "..", "pipeline_data"))
     os.makedirs(out_dir, exist_ok=True)
-    output_csv = os.path.join(out_dir, "tool_data.csv")
 
-    with open(output_csv, mode="w", newline="") as file:
-        writer = csv.writer(file)
-        writer.writerow(["Tool_ID", "Name", "Park_X", "Park_Y", "Park_Z", "Offset_X", "Offset_Y", "Offset_Z"])
-        for i in range(4):
-            name = tool_names.get(i, f"Unassigned_Tool_{i}")
-            park = tool_parks.get(i, np.array([0.0, 0.0, 0.0]))
-            offset = tool_offsets.get(i, np.array([0.0, 0.0, 0.0]))
-            writer.writerow([i, name, park[0], park[1], park[2], offset[0], offset[1], offset[2]])
+    recap = trace_mod.session(out_dir)
+    models = recap.section("Tool models", reset=True)
+    index = alias_index(assets)
+    default_park_post = twin_dir() / "Tool Post STL" / "park_post_47.blend"
 
-    # Write current head position so Blender can place the gantry at the real position.
+    tools = []
+    for i in range(4):
+        name = tool_names.get(i, f"Unassigned_Tool_{i}")
+        park = tool_parks.get(i, np.array([0.0, 0.0, 0.0]))
+        offset = tool_offsets.get(i, np.array([0.0, 0.0, 0.0]))
+
+        info = assets.get(index.get(normalize(name), "")) or {}
+        blend = info.get("blend") or None
+        if blend:
+            logger.info("Tool %d (%s) ← %s", i, name, blend)
+            models.ok(f"tool {i} · {name}", Path(blend).name)
+        elif info:
+            models.partial(f"tool {i} · {name}", "plugin matched but ships no .blend")
+        else:
+            models.failed(f"tool {i} · {name}", "no tool plugin matches this name")
+
+        tools.append({
+            "id": i,
+            "name": name,
+            "park": [float(v) for v in park[:3]],
+            "offsets": [float(v) for v in offset[:3]],
+            "blend": blend,
+            "park_post": info.get("park_post_blend") or (str(default_park_post) if blend else None),
+        })
+
     positions = state.get("positions", {})
-    if positions:
-        status = {
-            "head_position": {k: positions[k] for k in ("X", "Y", "Z") if k in positions},
-            "active_tool": state.get("active_tool", -1),
-            "source": source,
-        }
-        status_path = os.path.join(out_dir, "machine_status.json")
-        with open(status_path, "w") as f:
-            json.dump(status, f, indent=2)
+    head = {k: positions[k] for k in ("X", "Y", "Z") if k in positions} or None
+
+    output_path = machine_data.write(out_dir, {
+        "source": source,
+        "head_position": head,
+        "active_tool": state.get("active_tool", -1),
+        "tools": tools,
+    })
+
+    recap.result(
+        f"machine.json  —  source: {source}",
+        Path(output_path).read_text(),
+        output_path,
+    )
+    trace_path = trace_mod.flush(out_dir)
 
     logger.info("Machine state: %s", source)
-    logger.warning("tool_data.csv → %s", output_csv)
-    if positions:
-        pos = {k: positions[k] for k in ("X", "Y", "Z") if k in positions}
+    logger.warning("machine.json → %s", output_path)
+    if trace_path:
+        logger.warning("trace recap  → %s", trace_path)
+    if head:
         logger.warning("Head position  X=%.1f  Y=%.1f  Z=%.1f",
-                       pos.get("X", 0.0), pos.get("Y", 0.0), pos.get("Z", 0.0))
-        logger.warning("machine_status → %s", status_path)
-    return output_csv
+                       head.get("X", 0.0), head.get("Y", 0.0), head.get("Z", 0.0))
+    return str(output_path)

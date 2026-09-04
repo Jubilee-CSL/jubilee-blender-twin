@@ -28,25 +28,37 @@ class TwinDriver:
     def _write_paths_cache(self) -> None:
         """Write pipeline_data/jubilee_paths.json so Blender addon can locate gcode_logs/."""
         import json
+        from jubilee_twin import trace
 
         td = twin_dir()
+        pkg_sec = trace.session(td / "pipeline_data").section("Package paths", reset=True)
+        cam_sec = trace.session().section("Camera calibration", reset=True)
+
         cache: dict = {"twin_dir": str(td)}
+        pkg_sec.ok("twin_dir", str(td))
         for key in ("jubilee_dir", "interface_dir", "experiment_deck_dir", "camera_params_yaml"):
             try:
                 cache[key] = str(resolve(key))
+                pkg_sec.ok(key, cache[key])
             except RuntimeError:
-                pass
+                pkg_sec.failed(key, "entry point not registered")
 
         # Expose .env.hardware path so the Blender addon can reach the live machine.
         if "jubilee_dir" in cache:
             env_hw = Path(cache["jubilee_dir"]) / ".env.hardware"
             if env_hw.is_file():
                 cache["env_hardware"] = str(env_hw)
+                pkg_sec.ok("env_hardware", str(env_hw))
+            else:
+                pkg_sec.failed("env_hardware", "no .env.hardware in jubilee_dir")
 
         # Inline camera calibration so the Blender addon never has to touch YAML.
         # Preference: science_jubilee entry point → twin's own defaults/ fallback.
         fallback_yaml = Path(__file__).parent / "defaults" / "camera_params.yaml"
+        from_entry_point = bool(cache.get("camera_params_yaml"))
         yaml_path = cache.get("camera_params_yaml") or str(fallback_yaml)
+        if not from_entry_point:
+            cam_sec.failed("science_jubilee calibration", "camera_params_yaml not registered")
         try:
             import yaml  # type: ignore
             with open(yaml_path) as f:
@@ -54,17 +66,29 @@ class TwinDriver:
             if isinstance(data.get("camera"), dict):
                 cache["camera_params"] = data["camera"]
                 cache["camera_params_source"] = yaml_path
+                label = "science_jubilee calibration" if from_entry_point else "bundled defaults"
+                cam_sec.ok(label, Path(yaml_path).name)
+            else:
+                cam_sec.partial(Path(yaml_path).name, "no 'camera' block in YAML")
         except FileNotFoundError:
             log.warning("camera_params yaml not found: %s", yaml_path)
+            cam_sec.failed(Path(yaml_path).name, "file not found")
         except ImportError:
             log.warning("PyYAML not installed; skipping camera_params inlining")
+            cam_sec.failed("PyYAML", "not installed — calibration not inlined")
         except Exception as e:
             log.warning("Failed to load %s: %s", yaml_path, e)
+            cam_sec.failed(Path(yaml_path).name, str(e))
 
         cache_path = td / "pipeline_data" / "jubilee_paths.json"
         cache_path.parent.mkdir(exist_ok=True)
         cache_path.write_text(json.dumps(cache, indent=2))
         log.warning("paths cache  → %s", cache_path)
+
+        trace.session().result("jubilee_paths.json", cache_path.read_text(), cache_path)
+        trace_path = trace.flush(td / "pipeline_data")
+        if trace_path:
+            log.warning("trace recap  → %s", trace_path)
 
     def _working_blend(self) -> Path:
         """Return the working blend file; fall back to jubilee_belt.blend if setup-scene hasn't run."""
@@ -113,7 +137,7 @@ class TwinDriver:
         log.info("  scan                         Render the virtual-camera grid; --x/y/z-*, --width/--height.")
         log.info("  raytrace [gcode]             Run collision detection; pass G-code to refresh CSV data.")
         log.info("  place-camera                 Recreate Toolhead_Cam after a scene/calibration change.")
-        log.info("  place-tools                  Re-add tool models from pipeline_data/tool_data.csv.")
+        log.info("  place-tools                  Re-add tool models from pipeline_data/machine.json.")
         log.info("Optional deck: populate-deck requires science-jubilee-interface and an exported deck.blend.")
         log.info("All Blender commands accept --blender EXE (or use $JUBILEE_BLENDER_EXE / 'blender').")
         return 0
@@ -159,7 +183,7 @@ class TwinDriver:
         """Run the full gcode→animation pipeline.
 
         Steps:
-          1. Extract tool config → pipeline_data/tool_data.csv
+          1. Extract tool config → pipeline_data/machine.json
           2. Parse gcode        → pipeline_data/pathout.csv
           3. Launch Blender with animate_path.py
 

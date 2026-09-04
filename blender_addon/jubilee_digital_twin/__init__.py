@@ -121,8 +121,8 @@ class SETUP_OT_copy_machine_state(Operator):
     bl_idname = "setup.copy_machine_state"
     bl_label = "Copy Machine State"
     bl_description = (
-        "Fetch live state from Duet (.env.hardware), update tool_data.csv / "
-        "machine_status.json, and reposition the gantry axes in the open scene."
+        "Fetch live state from Duet (.env.hardware), update machine.json, "
+        "and reposition the gantry axes in the open scene."
     )
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -130,15 +130,13 @@ class SETUP_OT_copy_machine_state(Operator):
         twin_root = os.path.dirname(os.path.dirname(bpy.data.filepath))
         if twin_root not in sys.path:
             sys.path.insert(0, twin_root)
-        import json
         from jubilee_twin.pipeline import tool_id
         from jubilee_twin.paths import twin_dir
+        from jubilee_twin import machine_data
         pipeline_data_dir = str(twin_dir() / "pipeline_data")
         tool_id.run(output_dir=pipeline_data_dir)
-        status_path = os.path.join(pipeline_data_dir, "machine_status.json")
         try:
-            with open(status_path) as f:
-                pos = json.load(f).get("head_position", {})
+            pos = machine_data.load(pipeline_data_dir).get("head_position") or {}
             from . import scene_utils
             scene_utils.drive_to_mm(pos.get("X", 0.0), pos.get("Y", 0.0), pos.get("Z", 0.0))
         except Exception as e:
@@ -381,7 +379,7 @@ class ANIM_PT_setup(Panel):
         pipeline_data = os.path.join(twin_root, "pipeline_data")
 
         has_paths = os.path.isfile(os.path.join(pipeline_data, "jubilee_paths.json"))
-        has_tools = os.path.isfile(os.path.join(pipeline_data, "tool_data.csv"))
+        has_tools = os.path.isfile(os.path.join(pipeline_data, "machine.json"))
 
         if not has_paths or not has_tools:
             col = layout.column(align=True)

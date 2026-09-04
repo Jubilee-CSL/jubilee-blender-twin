@@ -17,42 +17,37 @@ import numpy as np
 
 
 def _setup_paths():
-    """Return CSV paths for the current .blend file."""
+    """Return the toolpath CSV and the pipeline_data directory for the current .blend."""
     addon_dir = os.path.dirname(os.path.abspath(__file__))
     if addon_dir not in sys.path:
         sys.path.insert(0, addon_dir)
     import scene_utils
     scene_utils.ensure_pipeline_on_path()
     csv_path = bpy.path.abspath("//../pipeline_data/pathout.csv")
-    tool_data_path = bpy.path.abspath("//../pipeline_data/tool_data.csv")
-    return csv_path, tool_data_path
+    pipeline_data = bpy.path.abspath("//../pipeline_data")
+    return csv_path, pipeline_data
 
 
-def apply_offset(x, y, z, tool_id, tool_data_path):
-    with open(tool_data_path, newline='') as csvfile:
-        reader = csv.reader(csvfile)
-        next(reader)
-        for row in reader:
-            if row[0] == tool_id:
-                x += float(row[5]) / 1000
-                y += float(row[6]) / 1000
-                z += float(row[7]) / 1000
+def apply_offset(x, y, z, tool_id, pipeline_data):
+    from jubilee_twin import machine_data
+    tool = machine_data.tool_by_id(machine_data.load(pipeline_data), tool_id)
+    if tool:
+        ox, oy, oz = tool["offsets"]
+        x += ox / 1000
+        y += oy / 1000
+        z += oz / 1000
     return x, y, z
 
 
-def identify_tool(tool_id, tool_data_path):
-    with open(tool_data_path, newline='') as csvfile:
-        reader = csv.reader(csvfile)
-        next(reader)
-        for row in reader:
-            if float(row[0]) == tool_id:
-                return row[1]
-    return None
+def identify_tool(tool_id, pipeline_data):
+    from jubilee_twin import machine_data
+    tool = machine_data.tool_by_id(machine_data.load(pipeline_data), tool_id)
+    return tool["name"] if tool else None
 
 
 def apply_machine_state(positions: dict, active_tool_idx) -> None:
     """Position axes and mount the active tool without inserting keyframes."""
-    _, tool_data_path = _setup_paths()
+    _, pipeline_data = _setup_paths()
     from jubilee_twin.pipeline.utils import get_axis_max
 
     x_axis = bpy.data.objects.get("X-axis")
@@ -71,7 +66,7 @@ def apply_machine_state(positions: dict, active_tool_idx) -> None:
 
     active_idx = int(active_tool_idx) if active_tool_idx is not None else -1
     if active_idx >= 0:
-        x, y, z = apply_offset(x, y, z, float(active_idx), tool_data_path)
+        x, y, z = apply_offset(x, y, z, float(active_idx), pipeline_data)
 
     x_axis.location.x = x_max - x / 1000
     y_axis.location.y = y_max - y / 1000
@@ -87,8 +82,8 @@ def apply_machine_state(positions: dict, active_tool_idx) -> None:
     gantry_anchor = gantry.objects[0]
     gantry_world = gantry_anchor.evaluated_get(depsgraph).matrix_world.copy()
 
-    active_name = identify_tool(float(active_idx), tool_data_path) if active_idx >= 0 else None
-    # active_name may be None if the tool index has no entry in tool_data.csv
+    active_name = identify_tool(float(active_idx), pipeline_data) if active_idx >= 0 else None
+    # active_name may be None if the tool index has no entry in machine.json
 
     tools_col = bpy.data.collections.get("Tools")
     if tools_col:
@@ -106,7 +101,7 @@ def apply_machine_state(positions: dict, active_tool_idx) -> None:
 
 def run_animation():
     """Read pipeline_data/ CSVs and bake keyframes into the open .blend scene."""
-    csv_path, tool_data_path = _setup_paths()
+    csv_path, pipeline_data = _setup_paths()
     from jubilee_twin.pipeline.utils import get_axis_min, get_axis_max
     addon_dir = os.path.dirname(os.path.abspath(__file__))
     if addon_dir not in sys.path:
@@ -149,7 +144,7 @@ def run_animation():
             tool_flag = False
 
         if float(tool_id) != -1.0 and tool_flag is not None:
-            x, y, z = apply_offset(x, y, z, float(tool_id), tool_data_path)
+            x, y, z = apply_offset(x, y, z, float(tool_id), pipeline_data)
 
         scene_utils.drive_to_mm(x, y, z, frame=frame)
 
@@ -160,9 +155,9 @@ def run_animation():
 
     for frame, (x, y, z, u, toolchange, tool_id) in enumerate(points, start=1):
         if toolchange > 0:
-            tool_name = identify_tool(float(tool_id), tool_data_path)
+            tool_name = identify_tool(float(tool_id), pipeline_data)
             if tool_name is None:
-                print(f"Tool id {tool_id} not found in tool_data.csv — skipping tool-change at frame {frame}")
+                print(f"Tool id {tool_id} not found in machine.json — skipping tool-change at frame {frame}")
                 continue
             tool = bpy.data.collections.get(tool_name)
             if tool is None:
