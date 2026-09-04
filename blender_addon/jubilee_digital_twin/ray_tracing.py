@@ -301,6 +301,11 @@ def _gen_tool_hulls(scene,depsgraph):
         print(f"VISION DICT:{_vision_dict[current_tool_id]}")
         print("-"*60)
 
+        # An unnamed slot (no plugin, no .blend) has nothing to hull — skip it.
+        if not _target_dict[current_tool_id]:
+            print(f"Skipping {current_tool_name}: no collection in scene")
+            continue
+
         if current_tool_name+"_hull" not in bpy.data.collections["Tool Hulls"].all_objects:
             obj_hull,hull_mesh = _gen_convex_hull(_target_dict[current_tool_id],current_tool_name+"_hull",depsgraph)
             
@@ -343,7 +348,10 @@ def _compute_directions_CH(scene,frame_num):
         bpy.context.view_layer.update()
         depsgraph = bpy.context.evaluated_depsgraph_get()
 
-        obj_hull = _tool_hulls_dict[int(float(tools[frame-1]))]
+        obj_hull = _tool_hulls_dict.get(int(float(tools[frame-1])))
+        if obj_hull is None:
+            # Tool never got a hull (unnamed slot, no collection in scene) — leave zero.
+            continue
         obj_eval = obj_hull.evaluated_get(depsgraph)
 
         hull_origins[i] = obj_eval.matrix_world.translation.copy()
@@ -458,7 +466,10 @@ def ray_tracing_CD():
         print(f"FRAME {frame}")
         print("-"*60)
 
-        hull = _tool_hulls_dict[anim.tool_agenda[frame-1]]
+        hull = _tool_hulls_dict.get(anim.tool_agenda[frame-1])
+        if hull is None:
+            # No hull for this tool (unnamed slot) — no rays to cast.
+            continue
         print(f" CURRENT HULL FOR RT: {hull.name}")
 
         vertices = np.array([hull.matrix_world @ v.co for v in hull.data.vertices])

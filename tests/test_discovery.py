@@ -22,7 +22,8 @@ def _jubilee_root() -> Path:
 
 
 def _latest_gcode() -> str:
-    return str(_jubilee_root() / "gcode_logs" / "latest.gcode")
+    from jubilee_twin.paths import resolve
+    return str(resolve("gcode_logs_dir") / "latest.gcode")
 
 
 # ---------------------------------------------------------------------------
@@ -223,14 +224,16 @@ def test_path_follower_finds_latest_gcode():
 
 
 def test_path_follower_finds_named_gcode_in_science_jubilee():
-    """A filename-only arg is resolved against science_jubilee/gcode_logs/."""
-    gcode_dir = _jubilee_root() / "gcode_logs"
+    """A filename-only arg is resolved against science_jubilee/pipeline_data/gcode_logs/."""
+    from jubilee_twin.paths import resolve
+
+    gcode_dir = resolve("gcode_logs_dir")
     if not gcode_dir.is_dir():
         pytest.skip("gcode_logs/ directory does not exist in science_jubilee")
 
     existing = next(gcode_dir.glob("*.gcode"), None)
     if existing is None:
-        pytest.skip("no .gcode files in science_jubilee/gcode_logs/")
+        pytest.skip("no .gcode files in science_jubilee/pipeline_data/gcode_logs/")
 
     candidate = gcode_dir / existing.name
     assert candidate.is_file()

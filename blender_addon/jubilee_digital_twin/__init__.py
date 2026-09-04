@@ -57,7 +57,7 @@ def _gcode_enum_items(self, context):
     items = []
     jdir = _jubilee_dir()
     if jdir:
-        gcode_logs = os.path.join(jdir, "gcode_logs")
+        gcode_logs = os.path.join(jdir, "pipeline_data", "gcode_logs")
         if os.path.isdir(gcode_logs):
             for fn in sorted(os.listdir(gcode_logs)):
                 if fn.endswith(".gcode"):
@@ -544,7 +544,7 @@ def register():
     bpy.types.Scene.show_hulls = BoolProperty(name="Show Hulls", default=False)
     bpy.types.Scene.jubilee_gcode_file = EnumProperty(
         name="GCode File",
-        description="GCode file from science_jubilee/gcode_logs/ to animate",
+        description="GCode file from science_jubilee/pipeline_data/gcode_logs/ to animate",
         items=_gcode_enum_items,
     )
 

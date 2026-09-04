@@ -45,7 +45,7 @@ def main():
 
     # --- animate ---
     animate = subparsers.add_parser("animate", help="Parse gcode and animate in Blender.")
-    animate.add_argument("gcode", help="Path to gcode file (or filename to search in gcode_logs/).")
+    animate.add_argument("gcode", help="Path to gcode file (or filename to search in pipeline_data/gcode_logs/).")
     animate.add_argument("--interactive", action="store_true", help="Open Blender GUI instead of running headless.")
     animate.add_argument("--step", type=float, default=50.0, metavar="MM", help="mm between animation keyframes (default: 50).")
     animate.add_argument("--blender", default=None, metavar="EXE", help="Blender executable (default: $JUBILEE_BLENDER_EXE or 'blender').")

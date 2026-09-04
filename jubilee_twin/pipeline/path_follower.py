@@ -70,12 +70,13 @@ def run(
     """Parse gcode and write pathout.csv. Returns the output path.
 
     ``gcode_file`` may be an absolute/relative path, a bare filename resolved
-    against ``<jubilee_dir>/gcode_logs/``, or None to use ``latest.gcode``.
+    against science_jubilee's ``pipeline_data/gcode_logs/`` (via the
+    ``gcode_logs_dir`` entry point), or None to use ``latest.gcode``.
     """
     if gcode_file and os.path.isfile(gcode_file):
         fn = gcode_file
     else:
-        gcode_logs = resolve("jubilee_dir") / "gcode_logs"
+        gcode_logs = resolve("gcode_logs_dir")
         candidate = gcode_logs / (gcode_file or "latest.gcode")
         if not candidate.is_file():
             raise FileNotFoundError(f"gcode file not found at: {candidate}")
