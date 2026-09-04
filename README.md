@@ -10,6 +10,7 @@ A Blender-based *digital twin* of the [Jubilee](https://github.com/machineagency
 
 1. [Who this is for](#who-this-is-for)
 2. [Architecture and plugin connections](#architecture-and-plugin-connections)
+   - [Where each piece of data comes from](#where-each-piece-of-data-comes-from)
 3. [Installation](#installation)
 4. [The Blender base file](#the-blender-base-file)
 5. [Full pipeline: CLI workflow](#full-pipeline-cli-workflow)
@@ -47,12 +48,16 @@ science_jubilee            ← machine control, G-code logs, camera calibration
 science-jubilee-interface  ← GUI for deck/experiment design
   └─ experiment_deck/       ← per-experiment folders with deck.json + deck.blend
 
+<tool plugin repos>        ← one pip-installable package per tool (e.g. tool-pen-maag)
+  ├─ twin_assets/           ← tool.blend, park post, optional twin.json manifest
+  └─ templates/             ← tpre/tpost/tfree Duet macros (offline park positions)
+
 jubilee-blender-twin       ← this repo
   ├─ jubilee_twin/          ← Python package (CLI + TwinDriver)
   ├─ blender_addon/         ← Blender addon (jubilee_digital_twin.zip)
   ├─ blender_models/        ← jubilee_base.blend (version-controlled base scene)
   ├─ pipeline_data/         ← generated at runtime (CSVs, working .blend, paths cache)
-  └─ Tools/                 ← per-tool .blend files
+  └─ Tools/                 ← legacy per-tool .blend files (fallback only)
 ```
 
 ### Optional package connections
@@ -68,6 +73,13 @@ Each Jubilee package uses the `jubilee.paths` entry-point group to advertise its
 | `twin_dir` | `jubilee-blender-twin/` root | `jubilee-blender-twin` |
 | `camera_params_yaml` | path to camera calibration YAML | `science_jubilee` |
 
+Tool plugins use a separate group, `science_jubilee.tools.twin_assets`, to
+advertise their `twin_assets/` directory. One entry per installed tool:
+
+| Entry point group | Returns | Registered by |
+|---|---|---|
+| `science_jubilee.tools.twin_assets` | the tool's `twin_assets/` directory | every tool plugin package |
+
 Only the packages whose integration you intend to use must be installed into
 the same virtual environment. If an optional package is installed, install it
 with `pip install -e` so its entry point is registered and the twin can locate
@@ -77,6 +89,7 @@ it. The core twin and its default scene do not require any of these packages.
 |---|---|---|
 | `science-jubilee` | Live/saved machine state, G-code logs, and `camera_params.yaml` calibration | No |
 | `science-jubilee-interface` | Experiment deck exports and the **Populate Deck** workflow | No |
+| tool plugins (e.g. `tool-pen-maag`) | 3D models for each tool, plus offline park positions and offsets | No |
 
 Without `science-jubilee`, the twin uses its bundled camera calibration and a
 generic four-tool machine state with standard parking positions. Provide a
@@ -117,6 +130,202 @@ Example `pipeline_data/jubilee_paths.json` after running `setup-scene`:
 ```
 
 The `env_hardware` key is written only when `science_jubilee/.env.hardware` exists. The Blender addon reads it to reach the live machine IP without needing access to your venv. The `camera_params` block is inlined from the YAML so the Blender addon never needs to parse YAML itself. If `science_jubilee` does not register `camera_params_yaml`, a bundled fallback (`jubilee_twin/defaults/camera_params.yaml`) is used. In a standalone installation the cache contains `twin_dir` and the bundled camera defaults.
+
+---
+
+### Where each piece of data comes from
+
+The twin is split in two by a hard constraint: **Blender ships its own Python and
+cannot see your virtual environment.** So the addon can never call
+`science_jubilee`, resolve an entry point, or ask the Duet anything.
+
+Everything follows from that. The `jubilee-twin` CLI runs in your venv, where it
+*can* do those things, and it writes what it learns as plain files into
+`pipeline_data/`. Blender then only reads those files. `pipeline_data/` is the
+wall between the two worlds.
+
+```mermaid
+flowchart LR
+  SRC["<b>Sources</b><br/>the machine, tool plugins,<br/>.gcode, deck exports,<br/>jubilee_base.blend"]
+  CLI["<b>jubilee-twin</b><br/><i>your venv</i><br/>queries, resolves,<br/>parses"]
+  PD[("<b>pipeline_data/</b><br/>plain CSV + JSON<br/>+ the working .blend")]
+  BL["<b>Blender scripts</b><br/><i>Blender's own Python</i><br/>builds the scene"]
+
+  SRC --> CLI --> PD --> BL
+  BL -->|saves the scene back| PD
+```
+
+So when you wonder where a number in the scene came from, the answer is always
+a file in `pipeline_data/`, and the question becomes which CLI step wrote it:
+
+| File | Written by | Holds |
+|---|---|---|
+| `machine.json` | `pipeline/tool_id.py` | the whole machine: head position, active tool, and one record per tool slot (name, park, offsets, and which model to load) |
+| `pathout.csv` | `pipeline/path_follower.py` | the sampled toolpath, one row per step |
+| `jubilee_paths.json` | `driver.py` | package roots and camera calibration, inlined as absolute paths |
+| `jubilee_working.blend` | `driver.py`, then the Blender scripts | the scene itself |
+| `traces/<command>.html` | every step that did a fallback walk | one page of what was tried, what failed, and what won, with clickable paths |
+
+And on the Blender side, which script consumes what:
+
+| Script | Reads | Writes |
+|---|---|---|
+| `tool_placement.py` | `machine.json` | working blend |
+| `place_camera.py` | `jubilee_paths.json` (`camera_params`) | working blend |
+| `populate_deck.py` | `jubilee_paths.json` (`interface_dir`), the experiment's `deck.blend` | working blend |
+| `animate_path.py` | `pathout.csv`, `machine.json` | working blend |
+| `ray_tracing.py` | `pathout.csv`, `machine.json` | collision report |
+
+For tools specifically, only two of those files matter: `machine.json` is the
+complete per-slot record — what the machine says *and* which model to load — and
+`jubilee_paths.json` covers everything else the venv knows that Blender cannot
+discover on its own.
+
+#### Machine state — names, park positions, offsets
+
+`pipeline/tool_id.py` walks a fallback chain and stops at the first source that
+answers. Whatever it ends up using is printed as `Machine state: <source>`.
+
+```mermaid
+flowchart LR
+  A["live Duet<br/>address from .env.hardware"]
+  B["live Duet<br/>address from the saved snapshot"]
+  C["saved snapshot<br/>gcode_logs/machine_state.json"]
+  D["installed tool plugins<br/>tpostN.g · setup_duet.py"]
+  E["bundled defaults<br/>jubilee_twin/defaults/machine_state.json"]
+  OUT(["pipeline_data/machine.json"])
+
+  A -->|unreachable| B -->|unreachable| C -->|missing| D -->|slots still empty| E --> OUT
+```
+
+The first step that answers wins and writes `machine.json` straight away; the
+arrows are the failure path.
+
+> **What is the saved snapshot?** Every time you open a `science_jubilee` session,
+> its `RecordingTransport` asks the machine for a summary and writes it to
+> `science_jubilee/gcode_logs/machine_state.json` — tool names, offsets, park
+> positions, axis positions and the machine's address. It is a snapshot of the
+> last time you were actually connected, so the twin can reproduce that machine's
+> layout when the hardware is switched off. Its `address` field is also what the
+> second step retries a live query against.
+
+| Source | When it is used | What you get |
+|---|---|---|
+| Live Duet, address from `.env.hardware` | `JUBILEE_TRANSPORT=hardware` and `JUBILEE_ADDRESS` is set | the machine as it is right now |
+| Live Duet, address from the saved snapshot | no usable `.env.hardware`, but the snapshot records an `address` | the machine as it is right now |
+| Contents of the saved snapshot | that address did not respond | the machine as it was the last time you connected |
+| Installed tool plugins | there is no snapshot at all | only the tools you have installed, at their calibrated park positions |
+| Bundled defaults | always, for whatever is still missing | a generic four-slot Jubilee |
+
+The two live rows differ only in *where the IP comes from*, not in what they
+return. The row after them is the one that stops talking to hardware and reads
+the snapshot's contents instead.
+
+The last two combine: plugin data is applied first, then the generic four-slot
+table backfills the rest. Plugin data is also merged into a *live* state, but
+only into slots the machine reported as unnamed or empty — the Duet always wins
+per slot. The result is written to `pipeline_data/machine.json`:
+
+```json
+{
+  "source": "live (192.168.1.2)",
+  "head_position": { "X": 0.0, "Y": 0.0, "Z": 0.0 },
+  "active_tool": -1,
+  "tools": [
+    {
+      "id": 0,
+      "name": "tool_pen_maag",
+      "park": [277.0, 342.0, 0.0],
+      "offsets": [0.0, 0.0, 0.0],
+      "blend": "C:/.../tool-pen-maag/twin_assets/blend/tool.blend",
+      "park_post": "C:/.../tool-pen-maag/templates/park_post_47.blend"
+    }
+  ]
+}
+```
+
+| Field | Source |
+|---|---|
+| `source` | which step of the chain above answered |
+| `head_position`, `active_tool` | machine; `null` when nothing live answered |
+| `name`, `park`, `offsets` | machine, else plugin, else bundled defaults |
+| `blend`, `park_post` | the installed tool plugins |
+
+The machine fields and the model fields are resolved in the same pass: each
+slot's `name` is matched against the plugins' alias tables. That match happens
+here, in the venv, so the Blender side only ever reads absolute paths.
+
+#### Seeing what actually happened
+
+Every run writes `pipeline_data/traces/<command>.html` — `setup-scene.html`,
+`animate.html`, and so on — one page showing every fallback walk that command
+took. Open it in any browser. Each step is a card:
+
+| Colour | Meaning |
+|---|---|
+| green ✓ | answered — this is the one that won |
+| red ✕ | tried and failed |
+| grey – | skipped (e.g. autodiscovery bypassed by an explicit `machine_state_path`) |
+| orange + | partially satisfied — e.g. a plugin matched a tool name but ships no `.blend` |
+
+Every path is shown in full and is a clickable `file://` link, so you can jump
+straight to the `.blend` a tool resolved to or the `.g` macro a park position was
+read from. Paths that were looked for but do not exist are marked `(missing)`.
+
+The recap is grouped into one card per walk:
+
+| Section | Answers |
+|---|---|
+| **Package paths** | which `jubilee.paths` entry points resolved, and whether `.env.hardware` was found |
+| **Camera calibration** | whether intrinsics came from `science_jubilee` or the bundled fallback |
+| **Machine state** | the live → snapshot → plugins → defaults chain described above |
+| **Tool plugins** | every installed plugin: was a `tool.blend` found, was an offline park position derivable |
+| **Tool models** | per slot, which plugin matched the machine's tool name |
+
+The files produced are listed underneath with their full contents, and the whole
+run log is embedded at the bottom as a collapsible, timestamped table with the
+same clickable paths. So one page answers “where did this come from”, “what did
+we end up with”, and “what happened, in order”.
+
+The cards and the log are complementary rather than redundant: the cards are the
+structured *why* (only decision points, grouped by walk, colour-coded), the log
+is the chronological *what* (every step, including progress messages and Blender
+subprocess output that would only add noise to the cards).
+
+The renderer ([jubilee_twin/trace.py](jubilee_twin/trace.py)) writes
+self-contained HTML with the standard library only — no graphviz, no matplotlib,
+no external CSS — so it works unchanged inside Blender's bundled Python.
+`pipeline_data/` is git-ignored, so traces are never committed.
+
+#### Tool plugin data
+
+`jubilee_twin/tool_plugins.py` reads each `science_jubilee.tools.twin_assets`
+entry point and derives everything from the directory it returns:
+
+| Field | Derived from | Convention |
+|---|---|---|
+| `blend` | first `tool.blend`, else `<tool_key>.blend`, else the only non-scenery `.blend` | **name the tool body `tool.blend`** |
+| `park_post_blend` | `park_post*.blend` in `twin_assets/`, `templates/`, or the repo root | falls back to the twin's `Tool Post STL/park_post_47.blend` |
+| `aliases` | entry-point name, `TOOL_KEY`, and the tool class name | matching ignores case and separators |
+| `fallback.park` | `G53` lines in the plugin's `tpost*.g` (un-filled `{{...}}` templates are skipped) | fill in the templates during calibration |
+| `fallback.tool_number` | the `N` in `tpostN.g`, else `TOOL_NUMBER` in `setup_duet.py` | — |
+| `fallback.offsets` | the `G10 P.. X.. Y.. Z..` line in the plugin's macros | — |
+
+Nothing needs to be written by hand. An optional `twin_assets/twin.json`
+overrides any of these fields; the `fallback` block is merged key-by-key, so a
+partly filled manifest never erases a derived value. To point the twin at a tool
+repo that is not pip-installed, set `JUBILEE_TWIN_TOOL_ASSETS` to one or more
+`twin_assets/` directories (`os.pathsep`-separated).
+
+#### Tool placement in the scene
+
+`blender_addon/jubilee_digital_twin/tool_placement.py` reads one file,
+`pipeline_data/machine.json`: `park` says where to put each tool, `blend` and
+`park_post` say what to load. Which collection to append is decided inside
+Blender — the one named after the tool, else the only collection in the file.
+If a slot has no `blend` it falls back to the legacy `Tools/<name>.blend`, and a
+slot with no model at all is skipped with a log line. The gantry is positioned
+from `head_position`, or parked at home when that is `null`.
 
 ---
 
@@ -173,7 +382,7 @@ jubilee-twin setup-scene
 ```
 
 This copies the LFS-managed base scene to `pipeline_data/jubilee_working.blend`,
-writes `tool_data.csv`, writes the paths cache, places the available tools, and
+writes `machine.json`, writes the paths cache, places the available tools, and
 places `Toolhead_Cam`. With no connected packages, it uses the bundled camera
 calibration and generic four-tool machine state.
 
@@ -311,9 +520,10 @@ the bundled defaults, and writes three files inside
 
 | File written | Read from | Purpose |
 |---|---|---|
-| `pipeline_data/tool_data.csv` | Live/saved `science_jubilee` state when available, otherwise bundled defaults | Tool names, parking positions, offsets. Consumed by `place-tools`. |
+| `pipeline_data/machine.json` | Live/saved `science_jubilee` state when available, otherwise installed tool plugins, otherwise bundled defaults | Head position plus one record per tool slot: name, park position, offsets, and the model paths to load. Consumed by `place-tools`. |
 | `pipeline_data/jubilee_paths.json` | `twin_dir` plus any installed optional `jubilee.paths` entry points | Maps available package roots to absolute paths so Blender (which has no venv) can find them. |
 | `pipeline_data/jubilee_working.blend` | Copy of `blender_models/jubilee_base.blend` | The scene every subsequent command edits. `jubilee_base.blend` is never touched. |
+| `pipeline_data/traces/setup-scene.html` | Every fallback walk taken by this command | What was tried, what failed in red, what won in green, with every path clickable. Open in a browser. |
 
 ![setupscene](docs/setup-scene.png)
 
@@ -324,9 +534,11 @@ jubilee-twin place-tools
 ```
 
 Launches Blender headlessly against `pipeline_data/jubilee_working.blend` and runs `blender_addon/jubilee_digital_twin/tool_placement.py`, which:
-- Reads `pipeline_data/tool_data.csv`.
-- Appends each tool `.blend` from `jubilee-blender-twin/Tools/` plus its parking post.
+- Reads `pipeline_data/machine.json` for both park positions and model paths.
+- Appends each tool `.blend` from its plugin's `twin_assets/` (or `jubilee-blender-twin/Tools/` as a fallback) plus its parking post.
 - Positions them at their parking coordinates and saves the working blend.
+
+See [Where each piece of data comes from](#where-each-piece-of-data-comes-from) for the full resolution order.
 
 #### 2c — `jubilee-twin place-camera`
 
@@ -445,7 +657,7 @@ from jubilee_twin.driver import TwinDriver
 driver = TwinDriver.from_entry_point()
 
 # 1. Build the working scene from a .blend file (defaults to blender_models/jubilee_base.blend
-#    if base_blend is omitted). This also writes tool_data.csv + jubilee_paths.json, places
+#    if base_blend is omitted). This also writes machine.json + jubilee_paths.json, places
 #    the tools at their parking positions, and mounts Toolhead_Cam using the calibration in
 #    jubilee_paths.json / camera_params.yaml.
 driver.setup_scene(base_blend=Path("blender_models/jubilee_base.blend"))
@@ -484,7 +696,7 @@ Open the working blend file with `jubilee-twin open`, then press **N** to open t
 
 ### Setup subpanel
 
-**Copy Machine State** queries the live Jubilee machine (via `JUBILEE_ADDRESS` in `.env.hardware`) and positions the X/Y/Z axes in the scene to match. Falls back to `machine_status.json` if the machine is offline. The log buffer at the bottom of the panel shows the last few events.
+**Copy Machine State** queries the live Jubilee machine (via `JUBILEE_ADDRESS` in `.env.hardware`) and positions the X/Y/Z axes in the scene to match. Falls back through the chain in [Where each piece of data comes from](#where-each-piece-of-data-comes-from) if the machine is offline. The log buffer at the bottom of the panel shows the last few events, and `pipeline_data/traces/` holds a browsable page of the full walk.
 
 **Populate Deck** is an optional integration that loads labware from the most recent experiment exported by the interface app. It reads `pipeline_data/jubilee_paths.json` to find the interface directory, picks the newest `experiment_deck/<date>_<name>/` folder, loads `deck.blend`, aligns all labware onto `z_plate_3_V5`, and parents them so they move with the deck during animation.
 

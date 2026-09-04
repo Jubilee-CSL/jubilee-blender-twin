@@ -9,22 +9,15 @@ import csv
 import os
 import sys
 
+from jubilee_twin import machine_data
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-tool_data_path = os.path.join(SCRIPT_DIR, "..", "..", "pipeline_data", "tool_data.csv")
+pipeline_data_dir = os.path.join(SCRIPT_DIR, "..", "..", "pipeline_data")
 
 def _identify_tool(x, y):
     """Return the tool_id whose park position is nearest (X,Y); returns None if no match within 30 mm."""
-    closest_id = None
-    closest_dist = float('inf')
-    with open(tool_data_path, newline='') as csvfile:
-        reader = csv.reader(csvfile)
-        next(reader)
-        for row in reader:
-            dist = ((float(row[2]) - x) ** 2 + (float(row[3]) - y) ** 2) ** 0.5
-            if dist < closest_dist:
-                closest_dist = dist
-                closest_id = float(row[0])
-    return closest_id if closest_dist < 30.0 else None
+    tool_id = machine_data.nearest_tool_id(machine_data.load(pipeline_data_dir), x, y)
+    return float(tool_id) if tool_id is not None else None
 
 
 def _extract_numeric_after(token: str) -> float | None:

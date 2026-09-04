@@ -13,7 +13,7 @@ y_parts = bpy.data.collections["Y-parts"]
 
 # Path to the CSV file (relative to the .blend file)
 csv_path = bpy.path.abspath("//../pipeline_data/pathout.csv")
-tool_data_path = bpy.path.abspath("//../pipeline_data/tool_data.csv")
+tool_data_path = bpy.path.abspath("//../pipeline_data")
 
 STATIC_DIRECTION = np.array([0.0, 0.0, -0.01])  
 STATIC_DISTANCE  = 0.01
@@ -190,17 +190,11 @@ def _extract_tool_changing(animation:AnimationData):
                 
                 frame = reader_0.line_num
 
-                with open(tool_data_path, newline='') as datafile:
-
-                    reader_1 = csv.reader(datafile)
-                    next(reader_1)
-
-                    for row_j in reader_1:
-                        
-                        if  row_j[0] == str(tool_id):
-
-                            print(f"TOOL:{row_j}")
-                            tool_name = row_j[1] 
+                from jubilee_twin import machine_data
+                tool = machine_data.tool_by_id(machine_data.load(tool_data_path), tool_id)
+                if tool:
+                    print(f"TOOL:{tool}")
+                    tool_name = tool["name"]
         
                 _tool_changing_dict[frame] = (tool_id,tool_name)
         animation.tool_agenda = tool_agenda

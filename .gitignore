@@ -1,7 +1,8 @@
-"*.blend" 
-"*.blend1" 
+*.blend
+*.blend1
 *.pyc
 __pycache__/
+*.egg-info/
 .venv/
 pipeline_data/
 Scans/

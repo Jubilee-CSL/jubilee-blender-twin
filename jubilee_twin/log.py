@@ -7,6 +7,8 @@ Convention used across the package:
   log.info()    — progress steps ("Step 2/4: placing tools...")
   log.warning() — file paths being read or written (shown bold-yellow so they're easy to spot)
   log.error()   — failures
+
+Records are also mirrored into the trace recap when science_jubilee is present.
 """
 import logging
 
@@ -24,6 +26,10 @@ def _setup() -> None:
         return
     root.setLevel(logging.DEBUG)
     root.propagate = False
+
+    from jubilee_twin.trace import capture_logger
+
+    capture_logger("jubilee_twin")
 
     try:
         import colorlog

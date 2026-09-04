@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import csv
+import json
 from pathlib import Path
 import pytest
 
@@ -35,8 +36,8 @@ def _blender_available() -> bool:
 # prepare
 # ---------------------------------------------------------------------------
 
-def test_prepare_creates_csvs(tmp_path):
-    """prepare writes tool_data.csv and pathout.csv to the given output dir."""
+def test_prepare_creates_pipeline_data(tmp_path):
+    """prepare writes machine.json and pathout.csv to the given output dir."""
     from jubilee_twin.pipeline import tool_id, path_follower
     from jubilee_twin.paths import resolve
 
@@ -55,15 +56,17 @@ def test_prepare_creates_csvs(tmp_path):
     tool_id.run(output_dir=out, machine_state_path=state_path)
     path_follower.run(gcode_file=gcode, output_dir=out)
 
-    tool_csv = tmp_path / "tool_data.csv"
+    machine_json = tmp_path / "machine.json"
     path_csv = tmp_path / "pathout.csv"
 
-    assert tool_csv.exists(), "tool_data.csv not created"
+    assert machine_json.exists(), "machine.json not created"
     assert path_csv.exists(), "pathout.csv not created"
 
-    rows = list(csv.reader(tool_csv.open()))
-    assert rows[0] == ["Tool_ID", "Name", "Park_X", "Park_Y", "Park_Z", "Offset_X", "Offset_Y", "Offset_Z"]
-    assert len(rows) == 5, f"Expected header + 4 rows, got {len(rows)}"
+    machine = json.loads(machine_json.read_text())
+    assert len(machine["tools"]) == 4, f"Expected 4 tool slots, got {len(machine['tools'])}"
+    assert set(machine["tools"][0]) >= {
+        "id", "name", "park", "offsets", "blend", "park_post"
+    }
 
     path_rows = path_csv.read_text().strip().splitlines()
     assert len(path_rows) > 0, "pathout.csv is empty"
@@ -107,7 +110,7 @@ def test_animate_produces_csvs():
     gcode = _latest_gcode()
     subprocess.run(["jubilee-twin", "animate", gcode], capture_output=True)
     pipeline_data = twin_dir() / "pipeline_data"
-    assert (pipeline_data / "tool_data.csv").exists()
+    assert (pipeline_data / "machine.json").exists()
     assert (pipeline_data / "pathout.csv").exists()
 
 
@@ -130,25 +133,16 @@ def test_raytrace_cli_exits_zero():
     assert result.returncode == 0, f"raytrace failed:\n{result.stderr}\n{result.stdout}"
 
 
-@pytest.mark.skipif(not _blender_available(), reason="blender not on PATH")
-def test_raytrace_missing_csvs_raises():
-    """raytrace without CSVs and without a gcode arg exits non-zero with a clear message."""
-    from jubilee_twin.paths import twin_dir
-    import os, shutil as sh
+def test_raytrace_missing_pipeline_data_raises(tmp_path, monkeypatch):
+    """raytrace without pipeline data and without a gcode arg exits with a clear message."""
+    import jubilee_twin.paths as paths
+    import jubilee_twin.cli as cli
 
-    pipeline_data = twin_dir() / "pipeline_data"
-    backup = twin_dir() / "pipeline_data_backup_test"
+    # Point the CLI at an empty twin dir so the real pipeline_data/ is untouched.
+    monkeypatch.setattr(paths, "twin_dir", lambda: tmp_path)
+    monkeypatch.setattr("sys.argv", ["jubilee-twin", "raytrace"])
 
-    # temporarily hide pipeline_data/
-    if pipeline_data.exists():
-        pipeline_data.rename(backup)
-    try:
-        result = subprocess.run(
-            ["jubilee-twin", "raytrace"],
-            capture_output=True, text=True
-        )
-        assert result.returncode != 0
-        assert "pipeline_data" in result.stdout + result.stderr
-    finally:
-        if backup.exists():
-            backup.rename(pipeline_data)
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main()
+
+    assert "pipeline_data" in str(exit_info.value)

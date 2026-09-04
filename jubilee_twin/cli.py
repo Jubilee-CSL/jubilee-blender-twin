@@ -92,6 +92,15 @@ def main():
     args = parser.parse_args()
 
     from jubilee_twin.driver import TwinDriver
+    from jubilee_twin import trace
+    from jubilee_twin.paths import twin_dir as _twin_dir
+
+    # One recap image per command, titled with the command that produced it.
+    try:
+        trace.start_session(_twin_dir() / "pipeline_data", f"jubilee-twin {args.command}")
+    except Exception:
+        pass
+
     driver = TwinDriver(blender_exe=args.blender if hasattr(args, "blender") else None)
 
     if args.command == "setup-scene":
@@ -137,10 +146,10 @@ def main():
         else:
             from jubilee_twin.paths import twin_dir
             pathout = twin_dir() / "pipeline_data" / "pathout.csv"
-            tool_data = twin_dir() / "pipeline_data" / "tool_data.csv"
-            if not pathout.exists() or not tool_data.exists():
+            machine = twin_dir() / "pipeline_data" / "machine.json"
+            if not pathout.exists() or not machine.exists():
                 raise SystemExit(
-                    "pipeline_data/ CSVs not found. Run 'jubilee-twin animate <gcode>' first, "
+                    "pipeline_data/ not populated. Run 'jubilee-twin animate <gcode>' first, "
                     "or pass a gcode file: 'jubilee-twin raytrace <gcode>'"
                 )
         rc = driver.run_raytracing(interactive=args.interactive)
