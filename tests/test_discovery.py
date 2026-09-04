@@ -108,7 +108,6 @@ def test_resolve_raises_without_entry_point():
 
 def test_run_uses_machine_state_names_and_offsets(tmp_path):
     import json
-    import csv
     from jubilee_twin.pipeline.tool_id import run
 
     state = {
@@ -118,19 +117,16 @@ def test_run_uses_machine_state_names_and_offsets(tmp_path):
     state_file = tmp_path / "machine_state.json"
     state_file.write_text(json.dumps(state))
 
-    out_csv = run(output_dir=str(tmp_path), machine_state_path=str(state_file))
+    out = run(output_dir=str(tmp_path), machine_state_path=str(state_file))
 
-    with open(out_csv, newline="") as f:
-        rows = list(csv.DictReader(f))
-    row0 = rows[0]
-    assert row0["Name"] == "OVERRIDE_NAME"
-    assert float(row0["Offset_X"]) == pytest.approx(99.0)
-    assert float(row0["Offset_Y"]) == pytest.approx(88.0)
+    tool0 = json.loads(Path(out).read_text())["tools"][0]
+    assert tool0["name"] == "OVERRIDE_NAME"
+    assert tool0["offsets"][0] == pytest.approx(99.0)
+    assert tool0["offsets"][1] == pytest.approx(88.0)
 
 
 def test_run_uses_machine_state_parks(tmp_path):
     import json
-    import csv
     from jubilee_twin.pipeline.tool_id import run
 
     state = {
@@ -141,36 +137,36 @@ def test_run_uses_machine_state_parks(tmp_path):
     state_file = tmp_path / "machine_state.json"
     state_file.write_text(json.dumps(state))
 
-    out_csv = run(output_dir=str(tmp_path), machine_state_path=str(state_file))
+    out = run(output_dir=str(tmp_path), machine_state_path=str(state_file))
 
-    with open(out_csv, newline="") as f:
-        rows = list(csv.DictReader(f))
-    row0 = rows[0]
-    assert float(row0["Park_X"]) == pytest.approx(111.1)
-    assert float(row0["Park_Y"]) == pytest.approx(222.2)
+    tool0 = json.loads(Path(out).read_text())["tools"][0]
+    assert tool0["park"][0] == pytest.approx(111.1)
+    assert tool0["park"][1] == pytest.approx(222.2)
 
 
 def test_run_falls_back_to_defaults_when_no_state(tmp_path):
     """With no state source available, defaults give known park positions."""
-    import csv
+    import json
     from jubilee_twin.pipeline.tool_id import run
     from unittest.mock import patch
 
-    with patch("jubilee_twin.pipeline.tool_id.resolve", side_effect=RuntimeError("no entry point")), \
-         patch("jubilee_twin.pipeline.tool_id._read_env_address", return_value=None):
-        out_csv = run(output_dir=str(tmp_path))
+    from science_jubilee.machine_state import empty_state
 
-    with open(out_csv, newline="") as f:
-        rows = list(csv.DictReader(f))
+    with patch(
+        "jubilee_twin.pipeline.tool_id._science_jubilee_resolver",
+        return_value=lambda **kw: (empty_state(), "empty machine"),
+    ):
+        out = run(output_dir=str(tmp_path))
+
+    tools = json.loads(Path(out).read_text())["tools"]
     # Standard Jubilee parks: tool 0 at X=277, tool 3 at X=19
-    assert float(rows[0]["Park_X"]) == pytest.approx(277.0)
-    assert float(rows[3]["Park_X"]) == pytest.approx(19.0)
+    assert tools[0]["park"][0] == pytest.approx(277.0)
+    assert tools[3]["park"][0] == pytest.approx(19.0)
 
 
 def test_run_uses_saved_state_over_defaults(tmp_path):
-    import json, csv
+    import json
     from jubilee_twin.pipeline.tool_id import run
-    from unittest.mock import patch
 
     state = {
         "tools": {"0": {"name": "MySyringe"}},
@@ -181,16 +177,15 @@ def test_run_uses_saved_state_over_defaults(tmp_path):
     state_file.write_text(json.dumps(state))
 
     # address is absent so live query is skipped; saved file is used
-    out_csv = run(output_dir=str(tmp_path), machine_state_path=str(state_file))
+    out = run(output_dir=str(tmp_path), machine_state_path=str(state_file))
 
-    with open(out_csv, newline="") as f:
-        rows = list(csv.DictReader(f))
-    assert rows[0]["Name"] == "MySyringe"
-    assert float(rows[0]["Park_X"]) == pytest.approx(55.0)
+    tool0 = json.loads(Path(out).read_text())["tools"][0]
+    assert tool0["name"] == "MySyringe"
+    assert tool0["park"][0] == pytest.approx(55.0)
 
 
 def test_run_live_query_takes_priority_over_saved(tmp_path):
-    import json, csv
+    import json
     from jubilee_twin.pipeline.tool_id import run
     from unittest.mock import patch
 
@@ -210,13 +205,12 @@ def test_run_live_query_takes_priority_over_saved(tmp_path):
     state_file = tmp_path / "machine_state.json"
     state_file.write_text(json.dumps(saved_state))
 
-    with patch("jubilee_twin.pipeline.tool_id._try_live_query", return_value=live_state):
-        out_csv = run(output_dir=str(tmp_path), machine_state_path=str(state_file))
+    with patch("science_jubilee.machine_state.query_live", return_value=live_state):
+        out = run(output_dir=str(tmp_path))
 
-    with open(out_csv, newline="") as f:
-        rows = list(csv.DictReader(f))
-    assert rows[0]["Name"] == "LiveName"
-    assert float(rows[0]["Park_X"]) == pytest.approx(99.0)
+    tool0 = json.loads(Path(out).read_text())["tools"][0]
+    assert tool0["name"] == "LiveName"
+    assert tool0["park"][0] == pytest.approx(99.0)
 
 
 # ---------------------------------------------------------------------------
