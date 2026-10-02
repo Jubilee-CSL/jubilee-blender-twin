@@ -214,6 +214,30 @@ def test_run_live_query_takes_priority_over_saved(tmp_path):
     assert tool0["park"][0] == pytest.approx(99.0)
 
 
+def test_run_keeps_live_parks_with_int_slot_keys(tmp_path):
+    """A live summary keys slots by int; defaults must not overwrite them."""
+    import json
+    from jubilee_twin.pipeline.tool_id import run
+    from unittest.mock import patch
+
+    live_state = {
+        "transport": "HTTPTransport",
+        "address": "192.168.1.2",
+        "tools": {0: {"name": "Inoculator"}, 1: {"name": "tool_pen_maag"}},
+        "tool_offsets": {1: [3.0, 38.0, -16.95]},
+        "tool_parks": {0: [274.0, 337.0, 0.0], 1: [196.0, 335.0, 0.0]},
+    }
+    with patch("science_jubilee.machine_state.query_live", return_value=live_state):
+        out = run(output_dir=str(tmp_path))
+
+    data = json.loads(Path(out).read_text())
+    tools = data["tools"]
+    assert tools[0]["park"] == pytest.approx([274.0, 337.0, 0.0])
+    assert tools[1]["park"] == pytest.approx([196.0, 335.0, 0.0])
+    assert tools[1]["offsets"] == pytest.approx([3.0, 38.0, -16.95])
+    assert tools[1]["name"] == "tool_pen_maag"
+
+
 # ---------------------------------------------------------------------------
 # path_follower discovery
 # ---------------------------------------------------------------------------

@@ -5,9 +5,7 @@ Original author: Tanmay Chhatbar
 """
 from math import sqrt
 import numpy as np
-import csv 
 import os
-import sys
 
 from jubilee_twin import machine_data
 
@@ -95,14 +93,13 @@ def find_coord(line: str, curcoord: np.ndarray, storage: np.ndarray = [], relati
                 print(f"[Debug find_coord] Found axis {axis} with value {val}")
 
                 if axis == "H":
-                    print(f"[H branch] nl[3]={nl[3]}, curcoord[3]={curcoord[3]}, relative={relative}")
-                    print(f"[H branch] nl[5] before={nl[5]}")
-                    if nl[3] == 90.0:
+                    # An H1 U move runs to the lock's torque/home switch, so
+                    # its end value is arbitrary; its direction tells lock
+                    # (forward) from unlock (back).
+                    if val == 1.0 and nl[3] > curcoord[3]:
                         nl[4] = 1.0
-                        result = _identify_tool(curcoord[0], curcoord[1])
-                        print(f"[H branch] _identify_tool returned: {result}")
-                        nl[5] = result
-                    elif nl[3] == -364.0:
+                        nl[5] = _identify_tool(curcoord[0], curcoord[1])
+                    elif val == 1.0 and nl[3] < curcoord[3]:
                         nl[4] = -1.0
                         nl[5] = -1.0
 

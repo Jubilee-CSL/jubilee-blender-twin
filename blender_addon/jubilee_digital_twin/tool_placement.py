@@ -1,8 +1,6 @@
 import sys
-import os
 import logging
 import bpy
-import csv
 import mathutils
 from pathlib import Path
 
@@ -105,7 +103,6 @@ def place_tools():
         scene_utils.drive_to_mm(0.0, 0.0, 0.0)
         logger.warning("No head position recorded — gantry parked at home")
 
-    from jubilee_twin.pipeline.utils import get_axis_max
     x_axis = bpy.data.objects.get("X-axis")
     y_axis = bpy.data.objects.get("Y-axis")
     if x_axis is None:

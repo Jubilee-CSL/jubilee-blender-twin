@@ -192,7 +192,7 @@ flowchart LR
   A["live Duet<br/>address from .env.hardware"]
   B["live Duet<br/>address from the saved snapshot"]
   C["saved snapshot<br/>pipeline_data/machine_state.json"]
-  D["installed tool plugins<br/>tpostN.g · setup_duet.py"]
+  D["installed tool plugins<br/>tpostN.g"]
   E["bundled defaults<br/>jubilee_twin/defaults/machine_state.json"]
   OUT(["pipeline_data/machine.json"])
 
@@ -309,7 +309,7 @@ entry point and derives everything from the directory it returns:
 | `park_post_blend` | `park_post*.blend` in `twin_assets/`, `templates/`, or the repo root | falls back to the twin's `Tool Post STL/park_post_47.blend` |
 | `aliases` | entry-point name, `TOOL_KEY`, and the tool class name | matching ignores case and separators |
 | `fallback.park` | `G53` lines in the plugin's `tpost*.g` (un-filled `{{...}}` templates are skipped) | fill in the templates during calibration |
-| `fallback.tool_number` | the `N` in `tpostN.g`, else `TOOL_NUMBER` in `setup_duet.py` | — |
+| `fallback.tool_number` | the `N` in `tpostN.g` | — |
 | `fallback.offsets` | the `G10 P.. X.. Y.. Z..` line in the plugin's macros | — |
 
 Nothing needs to be written by hand. An optional `twin_assets/twin.json`
@@ -417,7 +417,7 @@ import.
 
 ### 4. Install the Blender addon
 
-Zip the folder `jubilee-blender-twin/blender_addon` manunally. 
+Zip the folder `jubilee-blender-twin/blender_addon` manually. 
 Alternatively, use the command line: 
 ```bash
 # Windows PowerShell
