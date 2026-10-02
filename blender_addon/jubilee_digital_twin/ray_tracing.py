@@ -4,7 +4,7 @@ import numpy as np
 from mathutils import Vector
 import bmesh
 from dataclasses import dataclass,field
-from enum import Enum, auto
+from enum import Enum
 import csv
 
 gantry = bpy.data.collections["gantry"]
@@ -88,7 +88,6 @@ def set_show_hulls(value: bool):
             obj.hide_render = not value
 
 def frame_update(scene):
-    global _tool_hulls_dict, _show_hulls, _show_rays
 
     with open(csv_path, newline='') as csvfile:
         reader = csv.reader(csvfile)
@@ -143,10 +142,8 @@ def remove_collection(name):
 
 def reset_dicts():
 
-    global _tool_changing_dict
     global _target_dict
     global _vision_dict
-    global _tool_hulls_dict 
 
     for key in _tool_hulls_dict.keys():
         _tool_hulls_dict[key] = None
@@ -168,7 +165,6 @@ def reset_dicts():
     
 
 def _extract_tool_changing(animation:AnimationData):
-    global _tool_changing_dict
 
     frame = 0
     tool_id = 0
@@ -265,10 +261,6 @@ def _gen_convex_hull(target_list,name,depsgraph):
     return  obj_hull, hull_mesh
 
 def _gen_tool_hulls(scene,depsgraph):
-    global _tool_changing_dict
-    global _target_dict
-    global _vision_dict
-    global _tool_hulls_dict 
 
     remove_collection("Tool Hulls")
 
@@ -279,7 +271,7 @@ def _gen_tool_hulls(scene,depsgraph):
     print("-"*60)
     print(f"DICT:{_tool_changing_dict}")
 
-    col = get_or_create_collection("Tool Hulls")
+    get_or_create_collection("Tool Hulls")
     for frame in _tool_changing_dict.keys():
 
         scene.frame_set(frame)
@@ -400,7 +392,6 @@ def _trace_ray_traj(frame_num,origins,directions,frame):
             
             
 def _ray_tracing(scene,depsgraph,frame,vertices,directions):
-    global _collision_list 
 
     distance = np.linalg.norm(directions)
     if distance < 1e-6:
@@ -435,7 +426,6 @@ def _ray_tracing(scene,depsgraph,frame,vertices,directions):
 
 def ray_tracing_CD():
 
-    global _target_dict,_vision_dict,_tool_changing_dict,_hull_verts_dict
 
     set_show_rays(False)
 

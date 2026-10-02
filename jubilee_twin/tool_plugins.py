@@ -252,7 +252,7 @@ def _trace_asset(sec, label: str, info: dict) -> None:
         sec.partial(label, "no tool.blend in twin_assets/")
         return
     if fallback.get("park"):
-        sec.ok(label, f"{Path(info['blend']).name} · park from {Path(fallback['source']).name}")
+        sec.ok(label, f"{Path(info['blend']).name} · offline park in {Path(fallback['source']).name}")
     else:
         sec.partial(
             label,

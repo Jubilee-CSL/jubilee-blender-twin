@@ -1,6 +1,4 @@
 import sys
-import os
-import json
 import logging
 import bpy
 from pathlib import Path
@@ -17,17 +15,13 @@ def _ensure_colorlog() -> None:
         pass
 
 
-def _setup() -> Path:
+def _read_paths_cache() -> dict:
+    """Put the addon and pipeline on sys.path, then read jubilee_paths.json."""
     addon_dir = str(Path(__file__).parent)
     if addon_dir not in sys.path:
         sys.path.insert(0, addon_dir)
     import scene_utils
     scene_utils.ensure_pipeline_on_path()
-    return scene_utils.twin_root()
-
-
-def _read_paths_cache(twin_root: Path) -> dict:
-    import scene_utils
     return scene_utils.read_paths_cache()
 
 
@@ -65,7 +59,7 @@ def _remove_collection(name: str) -> None:
     col = bpy.data.collections.get(name)
     if col is None:
         return
-    for obj in list(col.objects):
+    for obj in list(col.all_objects):
         bpy.data.objects.remove(obj, do_unlink=True)
     for parent in list(bpy.data.collections) + [bpy.context.scene.collection]:
         if col.name in [c.name for c in parent.children]:
@@ -73,10 +67,81 @@ def _remove_collection(name: str) -> None:
     bpy.data.collections.remove(col)
 
 
+# Measured on the real machine: distance from the bed plate's edge on the
+# machine-Y=0 side to the deck plate's Y=0 edge. In X the 305 mm deck spans
+# the bed's full width.
+DECK_Y_INSET_MM = 25.0
+
+
+def _deck_xy_origin(z_plate):
+    """World XY (metres) of machine X=Y=0: the deck plate's corner on the bed.
+
+    The deck plate is the reference, so the origin comes from the bed
+    plate's bounds, not from the carriage or tools. Machine +X/+Y run
+    toward world -X/-Y, so X=Y=0 is on the bed's max-X / max-Y side.
+    """
+    from mathutils import Vector
+
+    bpy.context.view_layer.update()
+    bed = z_plate.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    corners = [bed.matrix_world @ Vector(c) for c in bed.bound_box]
+    return (
+        max(c.x for c in corners),
+        max(c.y for c in corners) - DECK_Y_INSET_MM / 1000.0,
+    )
+
+
+def _file_world(obj):
+    """World matrix as stored in deck.blend, rebuilt from local transforms.
+
+    Objects freshly appended via bpy.data.libraries.load() are not in any
+    view layer yet, so their matrix_world is identity until a depsgraph
+    evaluates them (Blender 4+ no longer saves it in the file).
+    """
+    if obj.parent is None:
+        return obj.matrix_basis.copy()
+    return _file_world(obj.parent) @ obj.matrix_parent_inverse @ obj.matrix_basis
+
+
+def _place_labware(labware_objs, deck_col, z_plate, z_shift):
+    """Transform the complete exported geometry, then inherit bed motion.
+
+    deck.blend is already in machine metres. A half-turn about Z maps
+    increasing machine X/Y onto decreasing world X/Y, exactly once for
+    each imported object hierarchy. Preserve the existing Z alignment.
+    """
+    from mathutils import Matrix
+
+    origin_x, origin_y = _deck_xy_origin(z_plate)
+    transform = Matrix.Diagonal((-1.0, -1.0, 1.0, 1.0))
+    transform.translation = (origin_x, origin_y, z_shift)
+    objects = set(labware_objs)
+    original_world = {obj: _file_world(obj) for obj in labware_objs}
+
+    root = bpy.data.objects.new("Deck Machine Frame", None)
+    deck_col.objects.link(root)
+    root.parent = z_plate
+    root.matrix_parent_inverse = z_plate.matrix_world.inverted()
+    root.matrix_basis = transform
+
+    for obj in labware_objs:
+        if obj.name in bpy.context.scene.collection.objects:
+            bpy.context.scene.collection.objects.unlink(obj)
+        if obj.name not in deck_col.objects:
+            deck_col.objects.link(obj)
+        if obj.parent not in objects:
+            obj.parent = root
+            obj.matrix_parent_inverse = Matrix.Identity(4)
+            obj.matrix_basis = original_world[obj]
+
+    bpy.context.view_layer.update()
+    logger.info("Deck machine origin: X=%.6f Y=%.6f m", origin_x, origin_y)
+    return root
+
+
 def populate_deck() -> None:
     _ensure_colorlog()
-    twin_root = _setup()
-    paths = _read_paths_cache(twin_root)
+    paths = _read_paths_cache()
 
     exp_dir = _latest_experiment_dir(paths)
     if exp_dir is None:
@@ -110,9 +175,8 @@ def populate_deck() -> None:
 
     import mathutils
 
-    def _bbox(obj):
-        corners = [obj.matrix_world @ mathutils.Vector(c) for c in obj.bound_box]
-        return corners
+    def _bbox(obj, world):
+        return [world @ mathutils.Vector(c) for c in obj.bound_box]
 
     deck_plate_obj = None
     labware_objs = []
@@ -127,26 +191,14 @@ def populate_deck() -> None:
     if deck_plate_obj is None:
         raise RuntimeError("No 'deck' object found in deck.blend.")
 
-    corners_zplate = _bbox(z_plate)
-    corners_deck   = _bbox(deck_plate_obj)
+    corners_zplate = _bbox(z_plate, z_plate.matrix_world)
+    corners_deck   = _bbox(deck_plate_obj, _file_world(deck_plate_obj))
 
-    zplate_max_x = max(c.x for c in corners_zplate)
-    zplate_max_y = max(c.y for c in corners_zplate)
     zplate_min_z = min(c.z for c in corners_zplate)
     deck_min_z   = min(c.z for c in corners_deck)
 
+    _place_labware(labware_objs, deck_col, z_plate, zplate_min_z - deck_min_z)
     bpy.data.objects.remove(deck_plate_obj, do_unlink=True)
-
-    for obj in labware_objs:
-        if obj.name in bpy.context.scene.collection.objects:
-            bpy.context.scene.collection.objects.unlink(obj)
-        # Jubilee X=0 is at max world-X; Y=0 is at max world-Y → reflect both axes
-        obj.location.x = zplate_max_x - obj.location.x
-        obj.location.y = zplate_max_y - obj.location.y
-        obj.location.z += zplate_min_z - deck_min_z
-        obj.parent = z_plate
-        obj.matrix_parent_inverse = z_plate.matrix_world.inverted()
-        deck_col.objects.link(obj)
 
     logger.info("%d labware placed on %s", len(labware_objs), z_plate.name)
 

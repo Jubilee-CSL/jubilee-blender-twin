@@ -42,13 +42,7 @@ def _load_camera_params() -> dict:
     addon_dir = Path(__file__).parent
     sys.path.insert(0, str(addon_dir))
     from camera_params import load_camera_params  # type: ignore
-    try:
-        return load_camera_params(_twin_root())
-    except RuntimeError:
-        # Before setup-scene has run, pull straight from the bundled fallback yaml.
-        import importlib
-        cp = importlib.import_module("camera_params")
-        return cp._load_fallback_yaml()
+    return load_camera_params(_twin_root())
 
 
 # ── Small utilities ────────────────────────────────────────────────────────

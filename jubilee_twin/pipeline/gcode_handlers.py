@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import numpy as np
 from math import ceil
-from .utils import find_coord, dis
+from .utils import find_coord, dis, pipeline_data_dir
 
 
 # ---------------------------------------------------------------------------
@@ -81,12 +81,25 @@ class GCodeMachine:
     _absolute_mode : bool
         True  -> G90 absolute positioning (Duet power-on default).
         False -> G91 relative positioning.
+    _offset : np.ndarray
+        G10 X/Y/Z offset of the locked tool (zero with no tool).
+
+    Positions are machine coordinates. As in RepRapFirmware, coordinates in
+    a regular move are user coordinates (machine = user - tool offset) while
+    G53 moves are machine coordinates, so tool pickup/park moves are never
+    offset. Saved positions (G60) hold user coordinates, so restoring one
+    after a tool change accounts for the new tool's offset.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, tool_offsets: dict | None = None) -> None:
         self._absolute_mode: bool = True  # G90 is the Duet power-on default
         self._registry: dict[str, callable] = self._build_registry()
         self.storage: np.ndarray = np.zeros((3,6))
+        self._tool_offsets = (
+            _load_tool_offsets() if tool_offsets is None else tool_offsets
+        )
+        self._offset: np.ndarray = np.zeros(3)
+        self._machine_coords: bool = False  # inside a G53 line
 
     def _build_registry(self) -> dict[str, callable]:
         return {
@@ -105,20 +118,25 @@ class GCodeMachine:
     # --- internal helpers ---
 
     def _resolve_target(self, line: str, current_pos: np.ndarray) -> np.ndarray:
-        """Resolve the target position for a move, respecting the current positioning mode."""
-        
-        #print(f"DEBUG line={line.strip()!r}")
-        #print(f"DEBUG  current_pos={current_pos}")
-        #print(f"DEBUG  storage (before)=\n{self.storage}")
+        """Resolve the target machine position for a move, respecting the
+        positioning mode and the locked tool's offset."""
+        offset = np.zeros(3) if self._machine_coords else self._offset
+        user_pos = current_pos.copy()
+        user_pos[0:3] += offset
         target, new_storage = find_coord(
-            line, current_pos, self.storage, relative=not self._absolute_mode
+            line, user_pos, self.storage, relative=not self._absolute_mode
         )
-       
-        #print(f"DEBUG  target={target}")
-        #print(f"DEBUG  storage (after)=\n{new_storage}")
-        #print("-" * 60)
+        target[0:3] -= offset
 
-        return target,new_storage
+        # The tool's offset applies from its lock until its unlock.
+        if target[4] > 0.0:
+            self._offset = np.array(
+                self._tool_offsets.get(int(target[5]), (0.0, 0.0, 0.0)), dtype=float
+            )
+        elif target[4] < 0.0:
+            self._offset = np.zeros(3)
+
+        return target, new_storage
 
     # --- motion handlers ---
 
@@ -182,16 +200,24 @@ class GCodeMachine:
         ,current_pos: np.ndarray
         ,distance_per_step: float
     ) -> list[np.ndarray]:
-        line.split()
+        """Run the rest of the line in machine coordinates (no tool offset)."""
         nl = str(line[3:]).strip()
         command = parse_command(nl)
-        handler =  self.get_handler(command)
+        handler = self.get_handler(command) if command else None
         if handler is None:
             return []
-        return handler(nl,current_pos,distance_per_step)
-        
+        self._machine_coords = True
+        try:
+            return handler(nl, current_pos, distance_per_step)
+        finally:
+            self._machine_coords = False
 
-    
 
-        
-        
+def _load_tool_offsets() -> dict[int, list[float]]:
+    """{tool id: [x, y, z]} G10 offsets (mm) from pipeline_data/machine.json."""
+    from jubilee_twin import machine_data
+
+    return {
+        int(tool["id"]): [float(v) for v in tool.get("offsets", [0.0, 0.0, 0.0])[:3]]
+        for tool in machine_data.load(pipeline_data_dir).get("tools", [])
+    }

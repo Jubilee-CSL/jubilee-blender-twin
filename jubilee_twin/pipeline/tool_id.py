@@ -2,7 +2,7 @@ import os
 import json
 import numpy as np
 from pathlib import Path
-from jubilee_twin.paths import resolve, twin_dir
+from jubilee_twin.paths import twin_dir
 from jubilee_twin.log import get_logger
 from jubilee_twin import machine_data
 from jubilee_twin import trace as trace_mod
@@ -101,6 +101,19 @@ def _load_machine_state(machine_state_path: str | None = None,
     return state, f"defaults ({_DEFAULT_STATE.name})"
 
 
+def _normalize_slots(state: dict) -> None:
+    """Key every per-slot section by str, as snapshots and defaults are.
+
+    A live query returns int keys; left as-is, the plugin/default backfills
+    (which look up "0".."3") would treat the machine's values as missing and
+    overwrite them.
+    """
+    for section in ("tools", "tool_offsets", "tool_parks"):
+        values = state.get(section)
+        if isinstance(values, dict):
+            state[section] = {str(k): v for k, v in values.items()}
+
+
 def _backfill_parks(state: dict, trace) -> list[str]:
     """Give slots the standard Jubilee park position when the source had none.
 
@@ -121,6 +134,18 @@ def _backfill_parks(state: dict, trace) -> list[str]:
     return filled
 
 
+def _park_provenance(slot: int, tool_parks: dict, info: dict, source: str) -> str:
+    """Which of live/snapshot/plugin/defaults supplied this slot's park?"""
+    if slot not in tool_parks:
+        return "bundled defaults"
+    plugin_park = ((info.get("fallback") or {}).get("park")) if info else None
+    if plugin_park and np.allclose(tool_parks[slot][:3], plugin_park[:3]):
+        return f"plugin ({Path((info['fallback']).get('source', '')).name})"
+    if source.startswith("live"):
+        return "live machine"
+    return "snapshot"
+
+
 def run(output_dir: str = None, machine_state_path: str = None) -> str:
     """Build pipeline_data/machine.json. Returns the output path.
 
@@ -131,6 +156,7 @@ def run(output_dir: str = None, machine_state_path: str = None) -> str:
     """
     trace = trace_mod.session(output_dir).section("Machine state", reset=True)
     state, source = _load_machine_state(machine_state_path, trace)
+    _normalize_slots(state)
 
     assets = discover_tool_assets()
 
@@ -190,9 +216,11 @@ def run(output_dir: str = None, machine_state_path: str = None) -> str:
 
         info = assets.get(index.get(normalize(name), "")) or {}
         blend = info.get("blend") or None
+        park_origin = _park_provenance(i, tool_parks, info, source)
+        detail = f"{Path(blend).name} · park from {park_origin}" if blend else park_origin
         if blend:
             logger.info("Tool %d (%s) ← %s", i, name, blend)
-            models.ok(f"tool {i} · {name}", Path(blend).name)
+            models.ok(f"tool {i} · {name}", detail)
         elif info:
             models.partial(f"tool {i} · {name}", "plugin matched but ships no .blend")
         else:

@@ -28,87 +28,47 @@ def _setup_paths():
     return csv_path, pipeline_data
 
 
-def apply_offset(x, y, z, tool_id, pipeline_data):
-    from jubilee_twin import machine_data
-    tool = machine_data.tool_by_id(machine_data.load(pipeline_data), tool_id)
-    if tool:
-        ox, oy, oz = tool["offsets"]
-        x += ox / 1000
-        y += oy / 1000
-        z += oz / 1000
-    return x, y, z
-
-
 def identify_tool(tool_id, pipeline_data):
     from jubilee_twin import machine_data
     tool = machine_data.tool_by_id(machine_data.load(pipeline_data), tool_id)
     return tool["name"] if tool else None
 
 
-def apply_machine_state(positions: dict, active_tool_idx) -> None:
-    """Position axes and mount the active tool without inserting keyframes."""
-    _, pipeline_data = _setup_paths()
-    from jubilee_twin.pipeline.utils import get_axis_max
+def tool_roots(collection):
+    """Objects that inherit no transform from another object in this tool."""
+    objects = set(collection.all_objects)
+    return [obj for obj in collection.all_objects if obj.parent not in objects]
 
-    x_axis = bpy.data.objects.get("X-axis")
-    y_axis = bpy.data.objects.get("Y-axis")
-    z_axis = bpy.data.objects.get("Z-axis")
-    if x_axis is None or y_axis is None:
-        raise RuntimeError("X-axis or Y-axis not found — run Place Tools first")
 
-    x_max = get_axis_max(x_axis, 'X')
-    y_max = get_axis_max(y_axis, 'Y')
-    z_max = get_axis_max(z_axis, 'Z') if z_axis is not None else 0.0
+def clear_tool_constraints(collection):
+    """Remove previous mounts, including old constraints on child meshes."""
+    for obj in collection.all_objects:
+        for constraint in [c for c in obj.constraints if c.type == 'CHILD_OF']:
+            obj.constraints.remove(constraint)
 
-    x = float(positions.get("X", 0.0))
-    y = float(positions.get("Y", 0.0))
-    z = float(positions.get("Z", 0.0))
 
-    active_idx = int(active_tool_idx) if active_tool_idx is not None else -1
-    if active_idx >= 0:
-        x, y, z = apply_offset(x, y, z, float(active_idx), pipeline_data)
-
-    x_axis.location.x = x_max - x / 1000
-    y_axis.location.y = y_max - y / 1000
-    if z_axis is not None:
-        z_axis.location.z = z_max - z / 1000
-
-    gantry = bpy.data.collections.get("gantry")
-    if not gantry or not gantry.objects:
-        return
-
-    bpy.context.view_layer.update()
-    depsgraph = bpy.context.evaluated_depsgraph_get()
-    gantry_anchor = gantry.objects[0]
-    gantry_world = gantry_anchor.evaluated_get(depsgraph).matrix_world.copy()
-
-    active_name = identify_tool(float(active_idx), pipeline_data) if active_idx >= 0 else None
-    # active_name may be None if the tool index has no entry in machine.json
-
-    tools_col = bpy.data.collections.get("Tools")
-    if tools_col:
-        for tool_col in tools_col.children:
-            is_active = tool_col.name == active_name
-            for obj in tool_col.objects:
-                for c in [c for c in obj.constraints if c.type == 'CHILD_OF']:
-                    obj.constraints.remove(c)
-                if is_active:
-                    c = obj.constraints.new('CHILD_OF')
-                    c.target = gantry_anchor
-                    c.inverse_matrix = gantry_world.inverted()
-                    c.influence = 1.0
+def carriage_anchor():
+    """Use the named carriage, which inherits both X and Y axis motion."""
+    anchor = bpy.data.objects.get("XY-carriage")
+    if anchor is None:
+        raise RuntimeError("XY-carriage not found — run setup-scene first")
+    return anchor
 
 
 def run_animation():
     """Read pipeline_data/ CSVs and bake keyframes into the open .blend scene."""
     csv_path, pipeline_data = _setup_paths()
-    from jubilee_twin.pipeline.utils import get_axis_min, get_axis_max
     addon_dir = os.path.dirname(os.path.abspath(__file__))
     if addon_dir not in sys.path:
         sys.path.insert(0, addon_dir)
     import scene_utils
 
-    gantry = bpy.data.collections["gantry"]
+    gantry_anchor = carriage_anchor()
+
+    tools_col = bpy.data.collections.get("Tools")
+    if tools_col:
+        for tool_col in tools_col.children:
+            clear_tool_constraints(tool_col)
 
     x_axis = bpy.data.objects.get("X-axis")
     y_axis = bpy.data.objects.get("Y-axis")
@@ -129,31 +89,18 @@ def run_animation():
             points.append(tuple(map(float, row)))
     points = np.array(points)
 
-    x_min = get_axis_min(x_axis, 'X')
-    y_min = get_axis_min(y_axis, 'Y')
-    print(f"Axis mins: X={x_min}, Y={y_min}")
-
     scene_utils.drive_to_mm(0.0, 0.0, 0.0)  # park at home before keying
 
-    # Pass 1: insert position keyframes
-    tool_flag = False
-    for frame, (x, y, z, u, toolchange, tool_id) in enumerate(points, start=1):
-        if toolchange > 0.0:
-            tool_flag = True
-        elif toolchange < 0.0:
-            tool_flag = False
-
-        if float(tool_id) != -1.0 and tool_flag is not None:
-            x, y, z = apply_offset(x, y, z, float(tool_id), pipeline_data)
-
+    # Pass 1: insert position keyframes. Rows are machine coordinates, with
+    # tool offsets already applied by the gcode parser.
+    for frame, (x, y, z, *_) in enumerate(points, start=1):
         scene_utils.drive_to_mm(x, y, z, frame=frame)
 
     # Pass 2: handle toolchanges now that all keyframes exist
-    tool_flag = False
     tool = None
     tool_name = None
 
-    for frame, (x, y, z, u, toolchange, tool_id) in enumerate(points, start=1):
+    for frame, (_x, _y, _z, _u, toolchange, tool_id) in enumerate(points, start=1):
         if toolchange > 0:
             tool_name = identify_tool(float(tool_id), pipeline_data)
             if tool_name is None:
@@ -165,7 +112,6 @@ def run_animation():
                 continue
 
             print(tool.name)
-            gantry_anchor = gantry.objects[0]
             bpy.context.scene.frame_set(frame)
             bpy.context.view_layer.update()
             # Read matrix_world from the evaluated depsgraph — required in --background mode,
@@ -176,11 +122,8 @@ def run_animation():
 
             print(f"Frame {frame}: gantry at {gantry_world.translation}")
 
-            for obj in tool.objects[:]:
-                to_remove = [c for c in obj.constraints if c.type == 'CHILD_OF']
-                for c in to_remove:
-                    obj.constraints.remove(c)
-
+            clear_tool_constraints(tool)
+            for obj in tool_roots(tool):
                 c = obj.constraints.new('CHILD_OF')
                 c.target = gantry_anchor
                 c.inverse_matrix = gantry_world.inverted()
@@ -192,16 +135,15 @@ def run_animation():
         elif toolchange < 0:
             tool = bpy.data.collections.get(tool_name) if tool_name else None
             if tool:
-                for obj in tool.objects[:]:
+                for obj in tool_roots(tool):
                     c = obj.constraints.get('Child Of')
                     if c:
                         c.influence = 1.0
                         c.keyframe_insert(data_path="influence", frame=frame)
                         c.influence = 0.0
                         c.keyframe_insert(data_path="influence", frame=frame + 1)
-                        tool_flag = False
-                        tool = None
-                        tool_name = None
+                    tool = None
+                    tool_name = None
 
     bpy.context.scene.frame_end = len(points)
     print(f"Animation complete: {len(points)} frames.")
