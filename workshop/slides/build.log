@@ -1,0 +1,399 @@
+Initial Win CP for (console input, console output, system): (CP850, CP850, CP1252)
+I changed them all to CP1252
+Rc files read:
+  NONE
+Latexmk: This is Latexmk, John Collins, 27 Dec. 2024. Version 4.86a.
+Latexmk: applying rule 'xelatex'...
+Rule 'xelatex':  Reasons for rerun
+Changed files or newly in use/created:
+  intro.tex
+Category 'changed_user':
+  intro.tex
+
+------------
+Run number 1 of rule 'xelatex'
+------------
+------------
+Running 'xelatex -no-pdf -interaction=nonstopmode -halt-on-error -recorder  "intro.tex"'
+------------
+This is XeTeX, Version 3.141592653-2.6-0.999996 (TeX Live 2024) (preloaded format=xelatex)
+ restricted \write18 enabled.
+entering extended mode
+(./intro.tex
+LaTeX2e <2024-11-01> patch level 1
+L3 programming layer <2024-12-09>
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamer.cls
+Document Class: beamer 2024/01/06 v3.71 A class for typesetting presentations
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbasemodes.sty
+(c:/texlive/2024/texmf-dist/tex/latex/etoolbox/etoolbox.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbasedecode.sty))
+(c:/texlive/2024/texmf-dist/tex/generic/iftex/iftex.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbaseoptions.sty
+(c:/texlive/2024/texmf-dist/tex/latex/graphics/keyval.sty))
+(c:/texlive/2024/texmf-dist/tex/latex/geometry/geometry.sty
+(c:/texlive/2024/texmf-dist/tex/generic/iftex/ifvtex.sty))
+(c:/texlive/2024/texmf-dist/tex/latex/pgf/math/pgfmath.sty
+(c:/texlive/2024/texmf-dist/tex/latex/pgf/utilities/pgfrcs.sty
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/utilities/pgfutil-common.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/utilities/pgfutil-latex.def)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/utilities/pgfrcs.code.tex
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/pgf.revision.tex)))
+(c:/texlive/2024/texmf-dist/tex/latex/pgf/utilities/pgfkeys.sty
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/utilities/pgfkeys.code.tex
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/utilities/pgfkeyslibraryfiltered.co
+de.tex))) (c:/texlive/2024/texmf-dist/tex/generic/pgf/math/pgfmath.code.tex
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/math/pgfmathutil.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/math/pgfmathparser.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/math/pgfmathfunctions.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/math/pgfmathfunctions.basic.code.te
+x)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/math/pgfmathfunctions.trigonometric
+.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/math/pgfmathfunctions.random.code.t
+ex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/math/pgfmathfunctions.comparison.co
+de.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/math/pgfmathfunctions.base.code.tex
+)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/math/pgfmathfunctions.round.code.te
+x)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/math/pgfmathfunctions.misc.code.tex
+)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/math/pgfmathfunctions.integerarithm
+etics.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/math/pgfmathcalc.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/math/pgfmathfloat.code.tex)))
+(c:/texlive/2024/texmf-dist/tex/latex/base/size11.clo)
+(c:/texlive/2024/texmf-dist/tex/latex/pgf/basiclayer/pgfcore.sty
+(c:/texlive/2024/texmf-dist/tex/latex/graphics/graphicx.sty
+(c:/texlive/2024/texmf-dist/tex/latex/graphics/graphics.sty
+(c:/texlive/2024/texmf-dist/tex/latex/graphics/trig.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/graphics-cfg/graphics.cfg)
+(c:/texlive/2024/texmf-dist/tex/latex/graphics-def/xetex.def)))
+(c:/texlive/2024/texmf-dist/tex/latex/pgf/systemlayer/pgfsys.sty
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/systemlayer/pgfsys.code.tex
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/systemlayer/pgf.cfg)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/systemlayer/pgfsys-xetex.def
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/systemlayer/pgfsys-dvipdfmx.def
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/systemlayer/pgfsys-common-pdf.def))
+))
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/systemlayer/pgfsyssoftpath.code.tex
+)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/systemlayer/pgfsysprotocol.code.tex
+)) (c:/texlive/2024/texmf-dist/tex/latex/xcolor/xcolor.sty
+(c:/texlive/2024/texmf-dist/tex/latex/graphics-cfg/color.cfg)
+(c:/texlive/2024/texmf-dist/tex/latex/graphics/mathcolor.ltx))
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/basiclayer/pgfcore.code.tex
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/math/pgfint.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/basiclayer/pgfcorepoints.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/basiclayer/pgfcorepathconstruct.cod
+e.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/basiclayer/pgfcorepathusage.code.te
+x)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/basiclayer/pgfcorescopes.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/basiclayer/pgfcoregraphicstate.code
+.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/basiclayer/pgfcoretransformations.c
+ode.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/basiclayer/pgfcorequick.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/basiclayer/pgfcoreobjects.code.tex)
+
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/basiclayer/pgfcorepathprocessing.co
+de.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/basiclayer/pgfcorearrows.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/basiclayer/pgfcoreshade.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/basiclayer/pgfcoreimage.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/basiclayer/pgfcoreexternal.code.tex
+) (c:/texlive/2024/texmf-dist/tex/generic/pgf/basiclayer/pgfcorelayers.code.tex
+)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/basiclayer/pgfcoretransparency.code
+.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/basiclayer/pgfcorepatterns.code.tex
+) (c:/texlive/2024/texmf-dist/tex/generic/pgf/basiclayer/pgfcorerdf.code.tex)))
+ (c:/texlive/2024/texmf-dist/tex/latex/pgf/utilities/xxcolor.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/base/atbegshi-ltx.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/hyperref/hyperref.sty
+(c:/texlive/2024/texmf-dist/tex/latex/kvsetkeys/kvsetkeys.sty)
+(c:/texlive/2024/texmf-dist/tex/generic/kvdefinekeys/kvdefinekeys.sty)
+(c:/texlive/2024/texmf-dist/tex/generic/pdfescape/pdfescape.sty
+(c:/texlive/2024/texmf-dist/tex/generic/ltxcmds/ltxcmds.sty)
+(c:/texlive/2024/texmf-dist/tex/generic/pdftexcmds/pdftexcmds.sty
+(c:/texlive/2024/texmf-dist/tex/generic/infwarerr/infwarerr.sty)))
+(c:/texlive/2024/texmf-dist/tex/latex/hycolor/hycolor.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/hyperref/nameref.sty
+(c:/texlive/2024/texmf-dist/tex/latex/refcount/refcount.sty)
+(c:/texlive/2024/texmf-dist/tex/generic/gettitlestring/gettitlestring.sty
+(c:/texlive/2024/texmf-dist/tex/latex/kvoptions/kvoptions.sty)))
+(c:/texlive/2024/texmf-dist/tex/generic/stringenc/stringenc.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/hyperref/pd1enc.def)
+(c:/texlive/2024/texmf-dist/tex/generic/intcalc/intcalc.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/hyperref/puenc.def)
+(c:/texlive/2024/texmf-dist/tex/latex/url/url.sty)
+(c:/texlive/2024/texmf-dist/tex/generic/bitset/bitset.sty
+(c:/texlive/2024/texmf-dist/tex/generic/bigintcalc/bigintcalc.sty))
+
+Package hyperref Message: Stopped early.
+
+) (c:/texlive/2024/texmf-dist/tex/latex/hyperref/hxetex.def
+(c:/texlive/2024/texmf-dist/tex/latex/rerunfilecheck/rerunfilecheck.sty
+(c:/texlive/2024/texmf-dist/tex/latex/base/atveryend-ltx.sty)
+(c:/texlive/2024/texmf-dist/tex/generic/uniquecounter/uniquecounter.sty)))
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbaserequires.sty
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbasecompatibility.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbasefont.sty
+(c:/texlive/2024/texmf-dist/tex/latex/amsfonts/amssymb.sty
+(c:/texlive/2024/texmf-dist/tex/latex/amsfonts/amsfonts.sty))
+(c:/texlive/2024/texmf-dist/tex/latex/sansmathaccent/sansmathaccent.sty
+(c:/texlive/2024/texmf-dist/tex/latex/koma-script/scrlfile.sty
+(c:/texlive/2024/texmf-dist/tex/latex/koma-script/scrlfile-hook.sty
+(c:/texlive/2024/texmf-dist/tex/latex/koma-script/scrlogo.sty)))))
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbasetranslator.sty
+(c:/texlive/2024/texmf-dist/tex/latex/translator/translator.sty))
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbasemisc.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbasetwoscreens.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbaseoverlay.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbasetitle.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbasesection.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbaseframe.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbaseverbatim.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbaseframesize.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbaseframecomponents.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbasecolor.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbasenotes.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbasetoc.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbasetemplates.sty
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbaseauxtemplates.sty
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbaseboxes.sty)))
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbaselocalstructure.sty
+(c:/texlive/2024/texmf-dist/tex/latex/tools/enumerate.sty))
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbasenavigation.sty
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbasenavigationsymbols.tex))
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbasetheorems.sty
+(c:/texlive/2024/texmf-dist/tex/latex/amsmath/amsmath.sty
+For additional information on amsmath, use the `?' option.
+(c:/texlive/2024/texmf-dist/tex/latex/amsmath/amstext.sty
+(c:/texlive/2024/texmf-dist/tex/latex/amsmath/amsgen.sty))
+(c:/texlive/2024/texmf-dist/tex/latex/amsmath/amsbsy.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/amsmath/amsopn.sty))
+(c:/texlive/2024/texmf-dist/tex/latex/amscls/amsthm.sty))
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerbasethemes.sty))
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerthemedefault.sty
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerfontthemedefault.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamercolorthemedefault.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerinnerthemedefault.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/beamer/beamerouterthemedefault.sty)))
+(c:/texlive/2024/texmf-dist/tex/latex/beamertheme-metropolis/beamerthememetropo
+lis.sty (c:/texlive/2024/texmf-dist/tex/latex/pgfopts/pgfopts.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/beamertheme-metropolis/beamerinnerthememe
+tropolis.sty (c:/texlive/2024/texmf-dist/tex/latex/tools/calc.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/pgf/frontendlayer/tikz.sty
+(c:/texlive/2024/texmf-dist/tex/latex/pgf/basiclayer/pgf.sty
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/modules/pgfmoduleshapes.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/modules/pgfmoduleplot.code.tex)
+(c:/texlive/2024/texmf-dist/tex/latex/pgf/compatibility/pgfcomp-version-0-65.st
+y)
+(c:/texlive/2024/texmf-dist/tex/latex/pgf/compatibility/pgfcomp-version-1-18.st
+y)) (c:/texlive/2024/texmf-dist/tex/latex/pgf/utilities/pgffor.sty
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/utilities/pgffor.code.tex))
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/frontendlayer/tikz/tikz.code.tex
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/libraries/pgflibraryplothandlers.co
+de.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/modules/pgfmodulematrix.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/frontendlayer/tikz/libraries/tikzli
+brarytopaths.code.tex))))
+(c:/texlive/2024/texmf-dist/tex/latex/beamertheme-metropolis/beamerouterthememe
+tropolis.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/beamertheme-metropolis/beamercolorthememe
+tropolis.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/beamertheme-metropolis/beamerfontthememet
+ropolis.sty (c:/texlive/2024/texmf-dist/tex/generic/iftex/ifxetex.sty)
+(c:/texlive/2024/texmf-dist/tex/generic/iftex/ifluatex.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/fontspec/fontspec.sty
+(c:/texlive/2024/texmf-dist/tex/latex/l3packages/xparse/xparse.sty
+(c:/texlive/2024/texmf-dist/tex/latex/l3kernel/expl3.sty
+(c:/texlive/2024/texmf-dist/tex/latex/l3backend/l3backend-xetex.def)))
+(c:/texlive/2024/texmf-dist/tex/latex/fontspec/fontspec-xetex.sty
+(c:/texlive/2024/texmf-dist/tex/latex/base/fontenc.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/fontspec/fontspec.cfg)))))
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/libraries/pgflibraryarrows.meta.cod
+e.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/frontendlayer/tikz/libraries/tikzli
+brarypositioning.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/frontendlayer/tikz/libraries/tikzli
+braryshapes.geometric.code.tex
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/libraries/shapes/pgflibraryshapes.g
+eometric.code.tex))
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/frontendlayer/tikz/libraries/tikzli
+braryshapes.symbols.code.tex
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/libraries/shapes/pgflibraryshapes.s
+ymbols.code.tex))
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/frontendlayer/tikz/libraries/tikzli
+brarycalc.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/frontendlayer/tikz/libraries/tikzli
+brarybackgrounds.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/frontendlayer/tikz/libraries/tikzli
+braryfit.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/frontendlayer/tikz/libraries/tikzli
+brarydecorations.pathmorphing.code.tex
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/frontendlayer/tikz/libraries/tikzli
+brarydecorations.code.tex
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/modules/pgfmoduledecorations.code.t
+ex))
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/libraries/decorations/pgflibrarydec
+orations.pathmorphing.code.tex))
+(c:/texlive/2024/texmf-dist/tex/latex/pgfplots/pgfplots.sty
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/pgfplots.revision.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/pgfplots.code.tex
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/pgfplotscore.code.tex
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/sys/pgfplotssysgeneric.code.te
+x))
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/libs/pgfplotslibrary.code.tex)
+
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/oldpgfcompatib/pgfplotsoldpgfs
+upp_loader.code.tex
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/libraries/pgflibraryfpu.code.tex)
+Package pgfplots: loading complementary utilities for your pgf version...
+
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/oldpgfcompatib/pgfplotsoldpgfs
+upp_pgfutil-common-lists.tex))
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/util/pgfplotsutil.code.tex
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/liststructure/pgfplotsliststru
+cture.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/liststructure/pgfplotsliststru
+ctureext.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/liststructure/pgfplotsarray.co
+de.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/liststructure/pgfplotsmatrix.c
+ode.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/numtable/pgfplotstableshared.c
+ode.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/liststructure/pgfplotsdeque.co
+de.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/util/pgfplotsbinary.code.tex
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/util/pgfplotsbinary.data.code.
+tex))
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/util/pgfplotsutil.verb.code.te
+x)
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/libs/pgflibrarypgfplots.surfsh
+ading.code.tex
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/sys/pgflibrarypgfplots.surfsha
+ding.pgfsys-xetex.def
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/sys/pgflibrarypgfplots.surfsha
+ding.pgfsys-dvipdfmx.def))))
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/util/pgfplotscolormap.code.tex
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/util/pgfplotscolor.code.tex))
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/pgfplotsstackedplots.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/pgfplotsplothandlers.code.tex
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/pgfplotsmeshplothandler.code.t
+ex
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/pgfplotsmeshplotimage.code.tex
+))) (c:/texlive/2024/texmf-dist/tex/generic/pgfplots/pgfplots.scaling.code.tex)
+
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/pgfplotscoordprocessing.code.t
+ex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/pgfplots.errorbars.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/pgfplots.markers.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/pgfplotsticks.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/pgfplots.paths.code.tex)
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/frontendlayer/tikz/libraries/tikzli
+brarydecorations.pathreplacing.code.tex
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/libraries/decorations/pgflibrarydec
+orations.pathreplacing.code.tex))
+(c:/texlive/2024/texmf-dist/tex/generic/pgfplots/libs/tikzlibrarypgfplots.conto
+urlua.code.tex))
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/frontendlayer/tikz/libraries/tikzli
+braryplotmarks.code.tex
+(c:/texlive/2024/texmf-dist/tex/generic/pgf/libraries/pgflibraryplotmarks.code.
+tex))) (c:/texlive/2024/texmf-dist/tex/latex/fontawesome5/fontawesome5.sty
+(c:/texlive/2024/texmf-dist/tex/latex/l3packages/l3keys2e/l3keys2e.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/fontawesome5/fontawesome5-utex-helper.sty
+(c:/texlive/2024/texmf-dist/tex/latex/fontawesome5/tufontawesomefree.fd)
+(c:/texlive/2024/texmf-dist/tex/latex/fontawesome5/tufontawesomebrands.fd)))
+(c:/texlive/2024/texmf-dist/tex/latex/booktabs/booktabs.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/base/ifthen.sty)
+(c:/texlive/2024/texmf-dist/tex/latex/beamertheme-metropolis/pgfplotsthemetol.s
+ty) (./intro.aux)
+*geometry* driver: auto-detecting
+*geometry* detected driver: xetex
+(./intro.out) (./intro.out)
+(c:/texlive/2024/texmf-dist/tex/latex/translator/translator-basic-dictionary-En
+glish.dict)
+(c:/texlive/2024/texmf-dist/tex/latex/translator/translator-bibliography-dictio
+nary-English.dict)
+(c:/texlive/2024/texmf-dist/tex/latex/translator/translator-environment-diction
+ary-English.dict)
+(c:/texlive/2024/texmf-dist/tex/latex/translator/translator-months-dictionary-E
+nglish.dict)
+(c:/texlive/2024/texmf-dist/tex/latex/translator/translator-numbers-dictionary-
+English.dict)
+(c:/texlive/2024/texmf-dist/tex/latex/translator/translator-theorem-dictionary-
+English.dict)
+Package pgfplots notification 'compat/show suggested version=true': you might b
+enefit from \pgfplotsset{compat=1.18} (current compat level: 1.9).
+
+(./intro.nav)
+[1]
+Overfull \hbox (18.68008pt too wide) in paragraph at lines 99--99
+ [][] 
+
+Overfull \vbox (3.18723pt too high) detected at line 99
+
+[2]
+Overfull \hbox (7.61282pt too wide) in paragraph at lines 126--126
+ [][] 
+(c:/texlive/2024/texmf-dist/tex/latex/amsfonts/umsa.fd)
+(c:/texlive/2024/texmf-dist/tex/latex/amsfonts/umsb.fd)
+[3]
+[4]
+[5]
+[6]
+[7]
+Overfull \hbox (15.51256pt too wide) in paragraph at lines 263--263
+ [][] 
+
+[8]
+[9]
+[10]
+[11]
+Overfull \hbox (9.10675pt too wide) in paragraph at lines 372--372
+ [][] 
+
+[12]
+Overfull \vbox (6.28369pt too high) detected at line 391
+
+[13]
+[14]
+Overfull \vbox (6.2727pt too high) detected at line 451
+
+[15]
+[16]
+[17] (./intro.aux) )
+(see the transcript file for additional information)
+Output written on intro.xdv (17 pages, 272928 bytes).
+Transcript written on intro.log.
+Latexmk: Getting log file 'intro.log'
+Latexmk: Examining 'intro.fls'
+Latexmk: Examining 'intro.log'
+Latexmk: Log file says output to 'intro.xdv'
+Latexmk: applying rule 'xdvipdfmx'...
+Rule 'xdvipdfmx':  Reasons for rerun
+Changed files or newly in use/created:
+  intro.xdv
+Category 'changed_source_rules':
+  xelatex
+
+------------
+Run number 1 of rule 'xdvipdfmx'
+------------
+------------
+Running 'xdvipdfmx -E -o "intro.pdf"  "intro.xdv"'
+------------
+intro.xdv -> intro.pdf
+[1][2][3][4][5][6][7][8][9][10][11][12][13][14][15][16][17]
+xdvipdfmx:warning: Creating ToUnicode CMap failed for "c:/texlive/2024/texmf-dist/fonts/opentype/public/fontawesome5/FontAwesome5Free-Solid-900.otf"
+xdvipdfmx:warning: Failed to load ToUnicode CMap for font "c:/texlive/2024/texmf-dist/fonts/opentype/public/fontawesome5/FontAwesome5Free-Solid-900.otf"
+
+3929142 bytes written
+Latexmk: All targets (intro.xdv intro.pdf) are up-to-date
+
+Reverting Windows console CPs to (in,out) = (850,850)

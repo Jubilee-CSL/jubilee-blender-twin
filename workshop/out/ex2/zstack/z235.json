@@ -1,0 +1,16 @@
+{
+  "name": "z235",
+  "x": 145.0,
+  "y": 145.0,
+  "z": 235,
+  "fstop": 4.0,
+  "focus_distance": 0.14,
+  "image": "C:\\Users\\Alienor\\Documents\\Projects\\Jubilee\\jubilee-blender-twin\\workshop\\out\\ex2\\zstack\\z235.png",
+  "width": 480,
+  "height": 264,
+  "camera_world_m": [
+    0.2845826745033264,
+    0.5776172876358032,
+    0.36141279339790344
+  ]
+}

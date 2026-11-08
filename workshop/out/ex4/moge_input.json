@@ -1,0 +1,32 @@
+{
+  "name": "moge_input",
+  "x": 147,
+  "y": 145,
+  "z": 340,
+  "ground_truth": "C:\\Users\\Alienor\\Documents\\Projects\\Jubilee\\jubilee-blender-twin\\workshop\\out\\ex4\\moge_input_gt.npz",
+  "image": "C:\\Users\\Alienor\\Documents\\Projects\\Jubilee\\jubilee-blender-twin\\workshop\\out\\ex4\\moge_input.png",
+  "width": 960,
+  "height": 528,
+  "camera_world_m": [
+    0.28258270025253296,
+    0.5776172876358032,
+    0.36141279339790344
+  ],
+  "K": [
+    [
+      733.7769917779265,
+      0.0,
+      478.89327715019215
+    ],
+    [
+      0.0,
+      733.7769540054808,
+      268.7823923873383
+    ],
+    [
+      0.0,
+      0.0,
+      1.0
+    ]
+  ]
+}

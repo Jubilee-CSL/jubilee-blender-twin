@@ -1,0 +1,14 @@
+{
+  "name": "first_look",
+  "x": 147,
+  "y": 195,
+  "z": 330,
+  "image": "C:\\Users\\Alienor\\Documents\\Projects\\Jubilee\\jubilee-blender-twin\\workshop\\out\\ex0\\first_look.png",
+  "width": 480,
+  "height": 264,
+  "camera_world_m": [
+    0.28258270025253296,
+    0.527617335319519,
+    0.36141279339790344
+  ]
+}

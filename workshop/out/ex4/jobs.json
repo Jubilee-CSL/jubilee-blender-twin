@@ -1,0 +1,13 @@
+{
+  "out_dir": "C:\\Users\\Alienor\\Documents\\Projects\\Jubilee\\jubilee-blender-twin\\workshop\\out\\ex4",
+  "percent": 50,
+  "jobs": [
+    {
+      "name": "moge_input",
+      "x": 147,
+      "y": 145,
+      "z": 340,
+      "ground_truth": true
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "name": "tile_x230_y220",
+  "x": 230.0,
+  "y": 220.0,
+  "z": 310,
+  "fstop": 4.0,
+  "focus_distance": 0.14,
+  "image": "C:\\Users\\Alienor\\Documents\\Projects\\Jubilee\\jubilee-blender-twin\\workshop\\out\\ex2\\raster\\tile_x230_y220.png",
+  "width": 480,
+  "height": 264,
+  "camera_world_m": [
+    0.19958269596099854,
+    0.502617359161377,
+    0.36141279339790344
+  ]
+}

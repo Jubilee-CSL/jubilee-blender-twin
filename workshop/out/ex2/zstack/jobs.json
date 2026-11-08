@@ -1,0 +1,78 @@
+{
+  "out_dir": "C:\\Users\\Alienor\\Documents\\Projects\\Jubilee\\jubilee-blender-twin\\workshop\\out\\ex2\\zstack",
+  "percent": 25,
+  "jobs": [
+    {
+      "name": "z220",
+      "x": 145.0,
+      "y": 145.0,
+      "z": 220,
+      "fstop": 4.0,
+      "focus_distance": 0.14
+    },
+    {
+      "name": "z235",
+      "x": 145.0,
+      "y": 145.0,
+      "z": 235,
+      "fstop": 4.0,
+      "focus_distance": 0.14
+    },
+    {
+      "name": "z250",
+      "x": 145.0,
+      "y": 145.0,
+      "z": 250,
+      "fstop": 4.0,
+      "focus_distance": 0.14
+    },
+    {
+      "name": "z265",
+      "x": 145.0,
+      "y": 145.0,
+      "z": 265,
+      "fstop": 4.0,
+      "focus_distance": 0.14
+    },
+    {
+      "name": "z280",
+      "x": 145.0,
+      "y": 145.0,
+      "z": 280,
+      "fstop": 4.0,
+      "focus_distance": 0.14
+    },
+    {
+      "name": "z295",
+      "x": 145.0,
+      "y": 145.0,
+      "z": 295,
+      "fstop": 4.0,
+      "focus_distance": 0.14
+    },
+    {
+      "name": "z310",
+      "x": 145.0,
+      "y": 145.0,
+      "z": 310,
+      "fstop": 4.0,
+      "focus_distance": 0.14
+    },
+    {
+      "name": "z325",
+      "x": 145.0,
+      "y": 145.0,
+      "z": 325,
+      "fstop": 4.0,
+      "focus_distance": 0.14
+    },
+    {
+      "name": "z340",
+      "x": 145.0,
+      "y": 145.0,
+      "z": 340,
+      "fstop": 4.0,
+      "focus_distance": 0.14
+    }
+  ]
+}

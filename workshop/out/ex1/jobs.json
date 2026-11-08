@@ -1,0 +1,12 @@
+{
+  "out_dir": "C:\\Users\\Alienor\\Documents\\Projects\\Jubilee\\jubilee-blender-twin\\workshop\\out\\ex1",
+  "percent": 25,
+  "jobs": [
+    {
+      "name": "crash_view",
+      "x": 147,
+      "y": 145,
+      "z": 150
+    }
+  ]
+}
