@@ -1,0 +1,16 @@
+{
+  "x": 147,
+  "y": 145,
+  "z": 340,
+  "name": "hdri_B_dim",
+  "hdri": "C:\\Users\\Alienor\\Documents\\Projects\\Jubilee\\jubilee-blender-twin\\workshop\\hdri\\studio_small_08_1k.hdr",
+  "strength": 0.8,
+  "image": "C:\\Users\\Alienor\\Documents\\Projects\\Jubilee\\jubilee-blender-twin\\workshop\\out\\ex3\\hdri_B_dim.png",
+  "width": 480,
+  "height": 264,
+  "camera_world_m": [
+    0.28258270025253296,
+    0.5776172876358032,
+    0.36141279339790344
+  ]
+}

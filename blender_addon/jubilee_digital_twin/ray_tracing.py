@@ -371,7 +371,7 @@ def _trace_ray_traj(frame_num,origins,directions,frame):
     try:
         import blender_plots as bplt
         arrows = bplt.Arrows(origins,
-                    np.tile(directions[frame-2], (len(origins), 1)),
+                    np.tile(directions[frame], (len(origins), 1)),
                     color=colors[frame-1],
                     name=f"frame_{frame}_directions",
                     head_length=0.001,
@@ -391,6 +391,34 @@ def _trace_ray_traj(frame_num,origins,directions,frame):
             coll.objects.link(blender_obj)
             
             
+def _helper_objects() -> set[str]:
+    """Visualisation objects the twin adds itself: never collision targets."""
+    names: set[str] = set()
+    for coll_name in ("Ray Tracing Directions", "Tool Hulls"):
+        coll = bpy.data.collections.get(coll_name)
+        if coll is not None:
+            names.update(obj.name for obj in coll.all_objects)
+    names.update(hull.name for hull in _tool_hulls_dict.values() if hull is not None)
+    return names
+
+
+def _cast_past_helpers(scene, depsgraph, origin, direction, distance, helpers):
+    """First hit along the ray that is real scene geometry, skipping helpers."""
+    step = 1e-5
+    while distance > 0.0:
+        hit, loc, normal, index, obj, mat = scene.ray_cast(
+            depsgraph=depsgraph, origin=origin, direction=direction, distance=distance
+        )
+        if not hit:
+            return None
+        if obj.name not in helpers:
+            return obj, loc
+        travelled = (loc - origin).length + step
+        origin = loc + direction * step
+        distance -= travelled
+    return None
+
+
 def _ray_tracing(scene,depsgraph,frame,vertices,directions):
 
     distance = np.linalg.norm(directions)
@@ -401,19 +429,16 @@ def _ray_tracing(scene,depsgraph,frame,vertices,directions):
         direction_normalized = Vector(directions / distance)
 
     obj_collided = []
-
-    arrows = bpy.data.objects.get(f"frame_{frame}_directions")
-    if arrows is not None:
-        arrows.hide_set(True)
+    helpers = _helper_objects()
 
     for coord in vertices:
-        hit, loc, normal, index, object, mat = scene.ray_cast(
-            depsgraph = depsgraph, 
-            origin = Vector(coord),
-            direction = direction_normalized,
-            distance = distance
-            )
-        if hit and object.name not in obj_collided:
+        found = _cast_past_helpers(
+            scene, depsgraph, Vector(coord), direction_normalized, distance, helpers
+        )
+        if found is None:
+            continue
+        object, loc = found
+        if object.name not in obj_collided:
             print(f"HIT LOCATION:{loc}")
             print(f"DIRECTION:{direction_normalized}")
             collision = CollisionEvent(frame,object.name,loc)
@@ -427,6 +452,8 @@ def _ray_tracing(scene,depsgraph,frame,vertices,directions):
 def ray_tracing_CD():
 
 
+    # Arrows from a previous run would sit in the rays' way.
+    remove_collection("Ray Tracing Directions")
     set_show_rays(False)
 
     _collision_list.clear()
@@ -447,6 +474,7 @@ def ray_tracing_CD():
 
     # cap at actual array size — directions uses 1-based frame as index
     safe_end = min(scene.frame_end, len(anim.directions))
+    cast_from: dict[int, np.ndarray] = {}  # frame -> hull vertices, for the arrows
     for frame in range(scene.frame_start+1, safe_end):
         scene.frame_set(frame)
         bpy.context.evaluated_depsgraph_get()
@@ -468,8 +496,10 @@ def ray_tracing_CD():
         _hide_vision_collection(_vision_dict[anim.tool_agenda[frame-1]])
         _ray_tracing(scene,depsgraph,frame,vertices,anim.directions[frame])
         _unhide_vision_collection(_vision_dict[anim.tool_agenda[frame-1]])
+        cast_from[frame] = vertices
 
-
+    # Draw arrows only once every frame is cast, so no ray can hit one.
+    for frame, vertices in cast_from.items():
         _trace_ray_traj(anim.frame_num,vertices,anim.directions,frame)
 
        

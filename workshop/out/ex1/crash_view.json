@@ -1,0 +1,14 @@
+{
+  "name": "crash_view",
+  "x": 147,
+  "y": 145,
+  "z": 150,
+  "image": "C:\\Users\\Alienor\\Documents\\Projects\\Jubilee\\jubilee-blender-twin\\workshop\\out\\ex1\\crash_view.png",
+  "width": 480,
+  "height": 264,
+  "camera_world_m": [
+    0.28258270025253296,
+    0.5776172876358032,
+    0.36141279339790344
+  ]
+}

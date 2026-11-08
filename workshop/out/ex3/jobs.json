@@ -1,0 +1,54 @@
+{
+  "out_dir": "C:\\Users\\Alienor\\Documents\\Projects\\Jubilee\\jubilee-blender-twin\\workshop\\out\\ex3",
+  "percent": 25,
+  "jobs": [
+    {
+      "x": 147,
+      "y": 145,
+      "z": 340,
+      "name": "default_kitchen"
+    },
+    {
+      "x": 147,
+      "y": 145,
+      "z": 340,
+      "name": "hdri_A",
+      "hdri": "C:\\Users\\Alienor\\Documents\\Projects\\Jubilee\\jubilee-blender-twin\\workshop\\hdri\\forest_slope_1k.hdr"
+    },
+    {
+      "x": 147,
+      "y": 145,
+      "z": 340,
+      "name": "hdri_B",
+      "hdri": "C:\\Users\\Alienor\\Documents\\Projects\\Jubilee\\jubilee-blender-twin\\workshop\\hdri\\studio_small_08_1k.hdr"
+    },
+    {
+      "x": 147,
+      "y": 145,
+      "z": 340,
+      "name": "hdri_B_rotated",
+      "hdri": "C:\\Users\\Alienor\\Documents\\Projects\\Jubilee\\jubilee-blender-twin\\workshop\\hdri\\studio_small_08_1k.hdr",
+      "rotation_deg": 120
+    },
+    {
+      "x": 147,
+      "y": 145,
+      "z": 340,
+      "name": "hdri_B_dim",
+      "hdri": "C:\\Users\\Alienor\\Documents\\Projects\\Jubilee\\jubilee-blender-twin\\workshop\\hdri\\studio_small_08_1k.hdr",
+      "strength": 0.8
+    },
+    {
+      "x": 147,
+      "y": 145,
+      "z": 340,
+      "name": "hdri_B_plain_bg",
+      "hdri": "C:\\Users\\Alienor\\Documents\\Projects\\Jubilee\\jubilee-blender-twin\\workshop\\hdri\\studio_small_08_1k.hdr",
+      "plain_background": [
+        0.05,
+        0.05,
+        0.05
+      ]
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "x": 147,
+  "y": 145,
+  "z": 340,
+  "name": "hdri_A",
+  "hdri": "C:\\Users\\Alienor\\Documents\\Projects\\Jubilee\\jubilee-blender-twin\\workshop\\hdri\\forest_slope_1k.hdr",
+  "image": "C:\\Users\\Alienor\\Documents\\Projects\\Jubilee\\jubilee-blender-twin\\workshop\\out\\ex3\\hdri_A.png",
+  "width": 480,
+  "height": 264,
+  "camera_world_m": [
+    0.28258270025253296,
+    0.5776172876358032,
+    0.36141279339790344
+  ]
+}
