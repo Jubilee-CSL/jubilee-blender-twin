@@ -4,13 +4,13 @@
   "positions": {"X": 0.0, "Y": 0.0, "Z": 0.0, "U": 0.0},
   "active_tool": -1,
   "tools": {
-    "0": {"name": "Unnamed_Tool_0"},
-    "1": {"name": "Unnamed_Tool_1"},
-    "2": {"name": "Unnamed_Tool_2"},
-    "3": {"name": "Unnamed_Tool_3"}
+    "0": {"name": "Inoculator"},
+    "1": {"name": "None"},
+    "2": {"name": "None"},
+    "3": {"name": "None"}
   },
   "tool_offsets": {
-    "0": [0.0, 0.0, 0.0],
+    "0": [0.0, 0.0, -70.0],
     "1": [0.0, 0.0, 0.0],
     "2": [0.0, 0.0, 0.0],
     "3": [0.0, 0.0, 0.0]
