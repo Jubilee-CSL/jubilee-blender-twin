@@ -395,15 +395,14 @@ The hull is a conservative approximation: it fills the hollows of the real assem
 
 ### With the plant
 
-1. Scrub the timeline to a frame where the tool is drawing a rectangle (around frame 35), then move the plant under the tool: select `basil_plant`, press **G** and, with snapping still on **Face Project**, drop it on the bed below the toolhead.
-2. Open the **Twin → Ray Tracing** panel and click **Launch Ray Tracing**. Blender freezes for a few seconds while it steps through the 68 frames. Meanwhile, the CLI gives details on the raytracing running. 
+1. Open the **Twin → Ray Tracing** panel and click **Launch Ray Tracing**. Blender freezes for a few seconds while it steps through the 68 frames. Meanwhile, the CLI gives details on the raytracing running. 
 ![CLI raytracinng](images/raytracing_cli.png)
 
-3. The panel reports **N collision(s) detected** and lists one entry per frame. Select an entry and click **Jump to Frame** to see the toolhead intersecting the plant.
+2. The panel reports **N collision(s) detected** and lists one entry per frame. Select an entry and click **Jump to Frame** to see the toolhead intersecting the plant.
 
 ![ray tracing collision](images/collision.png)
 
-4. In **Twin → Display**, click **Toggle Hulls**. The envelope of the current head state appears as a translucent shape around the carriage; scrubbing the timeline, it switches from `Gantry_hull` to `Inoculator_hull` at the tool pickup and back at the park move.
+3. In **Twin → Display**, click **Toggle Hulls**. The envelope of the current head state appears as a translucent shape around the carriage; scrubbing the timeline, it switches from `Gantry_hull` to `Inoculator_hull` at the tool pickup and back at the park move.
 
 
 ### Without the plant
